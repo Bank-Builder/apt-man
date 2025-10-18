@@ -193,6 +193,12 @@ show_packages() {
     local packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages"
     local packages=$(curl -s "$packages_url" 2>/dev/null)
     
+    # If standard structure fails, try flat structure (like NVIDIA)
+    if [[ ! "$packages" =~ ^Package: ]]; then
+        packages_url="${url}/Packages"
+        packages=$(curl -s "$packages_url" 2>/dev/null)
+    fi
+    
     # Check if we got valid package data (starts with Package:)
     if [[ "$packages" =~ ^Package: ]]; then
         echo "$packages" | grep -E '^Package: ' | awk '{print $2}' | sort | uniq
@@ -241,8 +247,15 @@ show_installed() {
     fi
     
     # Get available packages from the repository
+    # Try standard structure first
     local packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages"
     local available_packages=$(curl -s "$packages_url" 2>/dev/null)
+    
+    # If standard structure fails, try flat structure (like NVIDIA)
+    if [[ ! "$available_packages" =~ ^Package: ]]; then
+        packages_url="${url}/Packages"
+        available_packages=$(curl -s "$packages_url" 2>/dev/null)
+    fi
     
     if [[ ! "$available_packages" =~ ^Package: ]]; then
         echo "Could not retrieve package list from repository."
