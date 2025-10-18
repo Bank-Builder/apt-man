@@ -1196,6 +1196,73 @@ lint_sources() {
         checks_passed=$((checks_passed + 1))
     fi
     
+    # Check 17: Architecture mismatches
+    echo "[CHECK 17] Architecture mismatches"
+    local arch_issues=0
+    local system_arch=$(dpkg --print-architecture)
+    
+    # Common wrong architecture patterns
+    for file in "$SOURCES_DIR"/*.list; do
+        [[ -f "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        while read -r line; do
+            [[ "$line" =~ ^deb ]] || continue
+            # Check if line explicitly specifies architecture
+            if [[ "$line" =~ \[arch=([a-z0-9,]+)\] ]]; then
+                local archs="${BASH_REMATCH[1]}"
+                if [[ ! "$archs" =~ (^|,)${system_arch}(,|$) ]]; then
+                    echo "  [FAIL] Architecture mismatch: $file"
+                    echo "         Line: $line"
+                    echo "         Source architecture: $archs"
+                    echo "         System architecture: $system_arch"
+                    arch_issues=$((arch_issues + 1))
+                fi
+            fi
+            # Check URL path for obvious architecture mismatches
+            if [[ "$system_arch" == "amd64" ]] && [[ "$line" =~ (arm64|armhf|i386)/? ]]; then
+                echo "  [WARN] Possible architecture mismatch in URL: $file"
+                echo "         Line: $line"
+                echo "         System: $system_arch"
+                arch_issues=$((arch_issues + 1))
+            elif [[ "$system_arch" == "arm64" ]] && [[ "$line" =~ (amd64|i386)/? ]]; then
+                echo "  [WARN] Possible architecture mismatch in URL: $file"
+                echo "         Line: $line"
+                echo "         System: $system_arch"
+                arch_issues=$((arch_issues + 1))
+            fi
+        done < "$file"
+    done
+    
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        
+        # Check Architectures field
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^Architectures:[[:space:]]*(.+)$ ]]; then
+                local archs="${BASH_REMATCH[1]}"
+                if [[ ! "$archs" =~ (^| )${system_arch}( |$) ]]; then
+                    echo "  [FAIL] Architecture mismatch: $file"
+                    echo "         Architectures: $archs"
+                    echo "         System architecture: $system_arch"
+                    arch_issues=$((arch_issues + 1))
+                fi
+            fi
+        done < "$file"
+    done
+    
+    if [[ $arch_issues -gt 0 ]]; then
+        echo "         Found $arch_issues architecture issue(s)"
+        echo "         Recommendation: Fix or remove sources for wrong architecture"
+        echo ""
+        issues_found=$((issues_found + 1))
+    else
+        echo "  [PASS] No architecture mismatches detected"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
     # Summary
     echo "============================================"
     echo "LINT SUMMARY"
