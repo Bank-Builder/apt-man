@@ -180,7 +180,7 @@ deb: apt-man.1.gz debian/copyright debian/changelog
 	cp apt-man-completion.bash debian/usr/share/bash-completion/completions/apt-man
 	cp README.md debian/usr/share/doc/apt-man/
 	cp LICENCE debian/usr/share/doc/apt-man/
-	cp debian/copyright debian/usr/share/doc/apt-man/
+	cp debian/copyright debian/usr/share/doc/apt-man/copyright
 	gzip -9 -c debian/changelog > debian/usr/share/doc/apt-man/changelog.gz
 	
 	# Fix file permissions
@@ -220,7 +220,12 @@ deb: apt-man.1.gz debian/copyright debian/changelog
 	# Create prerm script
 	@echo "#!/bin/bash" > debian/DEBIAN/prerm
 	@echo "set -e" >> debian/DEBIAN/prerm
+	@echo "# Package removal completed successfully" >> debian/DEBIAN/prerm
+	@echo "exit 0" >> debian/DEBIAN/prerm
 	chmod 755 debian/DEBIAN/prerm
+	
+	# Remove debian directory files from root to avoid file-in-unusual-dir warnings
+	rm -f debian/changelog debian/copyright
 	
 	# Build the package with proper ownership
 	dpkg-deb --build --root-owner-group debian $(PACKAGE_NAME)_$(VERSION)_$(ARCHITECTURE).deb

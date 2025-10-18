@@ -339,7 +339,7 @@ show_installed() {
         fi
         
         # Check if package is installed
-        if dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
+        if apt list --installed "$pkg" 2>/dev/null | grep -q "^$pkg/"; then
             echo -ne "\r\033[K"  # Clear progress line
             echo "$pkg"
             found_packages=$((found_packages + 1))
