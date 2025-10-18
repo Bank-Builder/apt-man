@@ -2373,8 +2373,8 @@ Exit status:
   1  if problems with arguments or execution,
   2  if file not found or permission denied.
 
-Report bugs to: <https://github.com/yourusername/apt-man/issues>
-apt-man home page: <https://github.com/yourusername/apt-man>
+Report bugs to: <https://github.com/Bank-Builder/apt-man/issues>
+apt-man home page: <https://github.com/Bank-Builder/apt-man>
 EOF
 }
 

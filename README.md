@@ -404,7 +404,7 @@ Written by Andrew
 
 ## Reporting Bugs
 
-Report bugs to: https://github.com/yourusername/apt-man/issues
+Report bugs to: https://github.com/Bank-Builder/apt-man/issues
 
 ## See Also
 
