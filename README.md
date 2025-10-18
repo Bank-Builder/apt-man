@@ -240,10 +240,10 @@ apt-man --help
 
 The bash completion script provides intelligent autocompletion for:
 
-- **Commands**: `list`, `show`, `disable`, `enable`, `lint`, `revert`, `keys`, etc.
+- **Commands**: `list`, `disable`, `enable`, `lint`, `revert`, `keys`, etc.
 - **Subcommands**: For `keys` command (`--check`, `--refresh`, `--info`, `--move`, `--renewal`)
 - **Options**: `--keys` for `list`, `--fix` for `lint`
-- **Source IDs**: Dynamically completes with available source IDs for commands like `show`, `disable`, `remove`
+- **Source IDs**: Dynamically completes with available source IDs for commands like `disable`, `remove`
 - **Key files**: Completes GPG key file paths in `/etc/apt/keyrings/`, `/etc/apt/trusted.gpg.d/`, `/usr/share/keyrings/`
 - **Backup numbers**: Completes with available backup numbers for `revert` command
 - **Release names**: Completes with Ubuntu release codenames for `upgrade-source`
