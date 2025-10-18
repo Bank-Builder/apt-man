@@ -80,7 +80,9 @@ parse_deb822_keys() {
 classify_key() {
     local keyfile="$1"
     
-    if [[ "$keyfile" == "/etc/apt/trusted.gpg" ]]; then
+    if [[ "$keyfile" =~ ^-----BEGIN ]]; then
+        echo "INLINE (embedded key)"
+    elif [[ "$keyfile" == "/etc/apt/trusted.gpg" ]]; then
         echo "OLD (deprecated)"
     elif [[ "$keyfile" =~ ^/etc/apt/trusted\.gpg\.d/ ]]; then
         echo "OLD (trusted.gpg.d)"
@@ -90,6 +92,17 @@ classify_key() {
         echo "NEW (apt keyring)"
     else
         echo "CUSTOM"
+    fi
+}
+
+# Format key display (handle inline keys)
+format_key_display() {
+    local key="$1"
+    
+    if [[ "$key" =~ ^-----BEGIN ]]; then
+        echo "(embedded in .sources file)"
+    else
+        echo "$key"
     fi
 }
 
@@ -358,7 +371,8 @@ list_sources_with_keys() {
                 echo "     Key: None specified (uses default)"
             else
                 local key_format=$(classify_key "$key")
-                printf "     Key: %-25s %s\n" "$key_format" "$key"
+                local key_display=$(format_key_display "$key")
+                printf "     Key: %-25s %s\n" "$key_format" "$key_display"
             fi
             ((i++))
         done < <(parse_deb822_stanzas "$file")
@@ -392,7 +406,8 @@ list_sources_with_keys() {
                 echo "     Key: None specified (uses default)"
             else
                 local key_format=$(classify_key "$key")
-                printf "     Key: %-25s %s\n" "$key_format" "$key"
+                local key_display=$(format_key_display "$key")
+                printf "     Key: %-25s %s\n" "$key_format" "$key_display"
             fi
             ((i++))
         done < <(parse_deb822_stanzas "$file")
