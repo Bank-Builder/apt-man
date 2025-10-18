@@ -416,6 +416,129 @@ list_sources_with_keys() {
     echo "--------------------------------------"
 }
 
+# 11. Check for missing keys
+check_missing_keys() {
+    echo "Checking for missing or problematic keys..."
+    echo "--------------------------------------"
+    local found_issues=0
+    
+    # Process new-style .sources files (DEB822 format)
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        
+        # Parse stanzas to get URI|KEY pairs
+        while IFS='|' read -r url key; do
+            [[ -n "$url" ]] || continue
+            
+            if [[ "$key" == "none" ]]; then
+                echo "[WARN] No key specified: $url"
+                echo "       File: $file"
+                echo "       Uses default keyring (may be insecure)"
+                echo ""
+                found_issues=1
+            elif [[ "$key" =~ ^-----BEGIN ]]; then
+                echo "[OK] Inline key: $url"
+                echo "     File: $file"
+                echo ""
+            elif [[ ! -f "$key" ]]; then
+                echo "[ERROR] Missing key file: $key"
+                echo "        Required by: $url"
+                echo "        File: $file"
+                echo ""
+                found_issues=1
+            elif [[ ! -r "$key" ]]; then
+                echo "[ERROR] Key file not readable: $key"
+                echo "        Required by: $url"
+                echo "        File: $file"
+                echo ""
+                found_issues=1
+            else
+                local key_format=$(classify_key "$key")
+                echo "[OK] $key_format: $url"
+                echo "     Key: $key"
+                echo ""
+            fi
+        done < <(parse_deb822_stanzas "$file")
+    done
+    
+    echo "--------------------------------------"
+    if [[ $found_issues -eq 0 ]]; then
+        echo "All keys appear to be present and readable."
+    else
+        echo "Found issues with one or more keys."
+        echo "Fix missing keys by installing the appropriate keyring package"
+        echo "or by manually adding the key to /etc/apt/keyrings/"
+    fi
+}
+
+# 12. Refresh keys from keyserver
+refresh_keys() {
+    echo "Refreshing GPG keys from keyservers..."
+    echo "--------------------------------------"
+    
+    # Refresh keys in /etc/apt/keyrings/
+    local refreshed=0
+    for keyfile in /etc/apt/keyrings/*.gpg; do
+        [[ -f "$keyfile" ]] || continue
+        echo "Refreshing: $keyfile"
+        if sudo gpg --no-default-keyring --keyring "$keyfile" --refresh-keys 2>&1 | grep -q "refreshed"; then
+            echo "  Success"
+            refreshed=1
+        else
+            echo "  No updates or error"
+        fi
+    done
+    
+    echo "--------------------------------------"
+    if [[ $refreshed -eq 0 ]]; then
+        echo "Note: Most modern keys are managed by packages and don't need manual refresh."
+        echo "Keys in /usr/share/keyrings/ are updated via apt package updates."
+    fi
+    echo "Key refresh complete."
+}
+
+# 13. Show key details
+show_key_details() {
+    local keyfile="$1"
+    
+    if [[ ! -f "$keyfile" ]]; then
+        echo "Error: Key file not found: $keyfile"
+        return 1
+    fi
+    
+    echo "Key details for: $keyfile"
+    echo "--------------------------------------"
+    
+    # Show key information
+    gpg --no-default-keyring --keyring "$keyfile" --list-keys --with-colons 2>/dev/null | \
+    while IFS=: read -r type trust length algo keyid date expires dummy uids rest; do
+        if [[ "$type" == "pub" ]]; then
+            echo "Key ID: $keyid"
+            echo "Algorithm: $algo (${length} bits)"
+            if [[ -n "$date" ]]; then
+                echo "Created: $(date -d @$date 2>/dev/null || echo $date)"
+            fi
+            if [[ -n "$expires" ]]; then
+                echo "Expires: $(date -d @$expires 2>/dev/null || echo $expires)"
+                # Check if expired
+                if [[ "$expires" -lt $(date +%s) ]]; then
+                    echo "Status: EXPIRED"
+                else
+                    echo "Status: Valid"
+                fi
+            else
+                echo "Expires: Never"
+                echo "Status: Valid"
+            fi
+        elif [[ "$type" == "uid" ]]; then
+            echo "UID: $uids"
+        fi
+    done
+    
+    echo "--------------------------------------"
+}
+
 # CLI entry
 case "${1:-}" in
     --list)
@@ -460,8 +583,34 @@ case "${1:-}" in
     --list-disabled)
         list_disabled
         ;;
+    --check-keys)
+        check_missing_keys
+        ;;
+    --refresh-keys)
+        refresh_keys
+        ;;
+    --key-info)
+        [[ $# -eq 2 ]] || { echo "Usage: $0 --key-info <keyfile>"; exit 1; }
+        show_key_details "$2"
+        ;;
     *)
-        echo "Usage: $0 [--list [--keys] | --keys | --show <id> | --installed <id> | --remove <id> | --upgrade-source <old> <new> | --disable <id> | --enable <id> | --list-disabled]"
+        echo "Usage: $0 [OPTIONS]"
+        echo ""
+        echo "Source Management:"
+        echo "  --list [--keys]              List all sources (optionally with keys)"
+        echo "  --show <id>                  Show packages in a source"
+        echo "  --installed <id>             Show installed packages from a source"
+        echo "  --remove <id>                Remove all packages from a source"
+        echo "  --disable <id>               Disable a source"
+        echo "  --enable <id>                Enable a disabled source"
+        echo "  --list-disabled              List disabled sources"
+        echo "  --upgrade-source <old> <new> Upgrade sources to new release"
+        echo ""
+        echo "Key Management:"
+        echo "  --keys                       List all GPG keys"
+        echo "  --check-keys                 Check for missing or problematic keys"
+        echo "  --refresh-keys               Refresh keys from keyservers"
+        echo "  --key-info <keyfile>         Show detailed info about a key"
         exit 1
         ;;
 esac
