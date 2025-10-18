@@ -811,6 +811,60 @@ lint_sources() {
         checks_passed=$((checks_passed + 1))
     fi
     
+    # Check 10: Duplicate sources
+    echo "[CHECK 10] Duplicate repository sources"
+    local dup_count=0
+    declare -A seen_urls
+    
+    # Collect all URLs with their files
+    for file in "$SOURCES_DIR"/*.list; do
+        [[ -f "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        while read -r line; do
+            [[ "$line" =~ ^deb ]] || continue
+            local url=$(echo "$line" | awk '{print $2}')
+            url="${url%/}"  # Remove trailing slash
+            if [[ -v "seen_urls[$url]" ]]; then
+                echo "  [WARN] Duplicate source: $url"
+                echo "         First seen in: ${seen_urls[$url]}"
+                echo "         Also found in: $file"
+                dup_count=$((dup_count + 1))
+            else
+                seen_urls[$url]="$file"
+            fi
+        done < "$file"
+    done
+    
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        
+        while IFS='|' read -r url key; do
+            [[ -n "$url" ]] || continue
+            url="${url%/}"  # Remove trailing slash
+            if [[ -v "seen_urls[$url]" ]]; then
+                echo "  [WARN] Duplicate source: $url"
+                echo "         First seen in: ${seen_urls[$url]}"
+                echo "         Also found in: $file"
+                dup_count=$((dup_count + 1))
+            else
+                seen_urls[$url]="$file"
+            fi
+        done < <(parse_deb822_stanzas "$file")
+    done
+    
+    if [[ $dup_count -gt 0 ]]; then
+        echo "         Found $dup_count duplicate source(s)"
+        echo "         Recommendation: Remove duplicate entries to avoid confusion"
+        echo ""
+        warnings_found=$((warnings_found + 1))
+    else
+        echo "  [PASS] No duplicate sources found"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
     # Summary
     echo "============================================"
     echo "LINT SUMMARY"
