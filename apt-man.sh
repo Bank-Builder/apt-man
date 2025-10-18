@@ -740,7 +740,113 @@ list_sources_with_keys() {
     echo "--------------------------------------"
 }
 
-# 11. Check for missing keys
+# 11. Detect and remove duplicate sources
+dedupe_sources() {
+    echo "Checking for duplicate sources..."
+    echo "--------------------------------------"
+    
+    # Create a temporary file to track sources by URL
+    local temp_file="/tmp/apt-man-dedupe-$$"
+    local duplicates_found=0
+    local sources_to_remove=()
+    
+    # Build a list of all sources with their URLs and files
+    rm -f /tmp/sources_index
+    list_sources > /dev/null
+    
+    # Group sources by URL
+    declare -A url_to_files
+    declare -A url_to_ids
+    
+    while IFS='|' read -r id file url; do
+        [[ -n "$url" ]] || continue
+        url_to_files["$url"]+="$file "
+        url_to_ids["$url"]+="$id "
+    done < /tmp/sources_index
+    
+    # Find duplicates
+    for url in "${!url_to_files[@]}"; do
+        local files=(${url_to_files["$url"]})
+        local ids=(${url_to_ids["$url"]})
+        
+        if [[ ${#files[@]} -gt 1 ]]; then
+            echo "Duplicate sources found for: $url"
+            echo "  Files: ${files[*]}"
+            echo "  IDs: ${ids[*]}"
+            echo ""
+            
+            duplicates_found=1
+            
+            # Keep the first file, mark others for removal
+            local keep_file="${files[0]}"
+            local keep_id="${ids[0]}"
+            
+            echo "  Keeping: $keep_file (ID: $keep_id)"
+            
+            for ((i=1; i<${#files[@]}; i++)); do
+                local remove_file="${files[i]}"
+                local remove_id="${ids[i]}"
+                echo "  Marking for removal: $remove_file (ID: $remove_id)"
+                sources_to_remove+=("$remove_file|$remove_id")
+            done
+            echo ""
+        fi
+    done
+    
+    if [[ $duplicates_found -eq 0 ]]; then
+        echo "No duplicate sources found."
+        echo "--------------------------------------"
+        return 0
+    fi
+    
+    echo "--------------------------------------"
+    echo "Found ${#sources_to_remove[@]} duplicate source(s) to remove."
+    echo ""
+    
+    if [[ ${#sources_to_remove[@]} -eq 0 ]]; then
+        echo "No duplicates to remove."
+        return 0
+    fi
+    
+    read -p "Remove duplicate sources? [y/N] " -n 1 -r
+    echo
+    
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Duplicate removal cancelled."
+        return 0
+    fi
+    
+    # Create backup
+    local backup_dir="/tmp/apt-man-backup-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$backup_dir"
+    echo "Created backup directory: $backup_dir"
+    
+    # Remove duplicates
+    local removed_count=0
+    for item in "${sources_to_remove[@]}"; do
+        IFS='|' read -r file id <<< "$item"
+        
+        if [[ -f "$file" ]]; then
+            # Backup the file
+            cp "$file" "$backup_dir/"
+            echo "Backed up: $file"
+            
+            # Remove the file
+            sudo rm "$file"
+            echo "Removed: $file (ID: $id)"
+            removed_count=$((removed_count + 1))
+        else
+            echo "File not found: $file"
+        fi
+    done
+    
+    echo ""
+    echo "Removed $removed_count duplicate source(s)."
+    echo "Backup created in: $backup_dir"
+    echo "Run 'sudo apt update' to refresh package lists."
+}
+
+# 12. Check for missing keys
 check_missing_keys() {
     echo "Checking for missing or problematic keys..."
     echo "--------------------------------------"
@@ -2345,6 +2451,7 @@ Commands:
   disable ID                   disable a source
   enable ID                    enable a disabled source
   list-disabled                list disabled sources
+  dedupe                       detect and remove duplicate sources
   upgrade-source OLD NEW       upgrade sources to new release
   lint                         comprehensive security audit of sources and keys
   lint --fix                   interactively fix warnings (HTTP, keys, unreachable)
@@ -2484,6 +2591,10 @@ case "$COMMAND" in
     
     list-disabled)
         list_disabled
+        ;;
+    
+    dedupe)
+        dedupe_sources
         ;;
     
     upgrade-source)
