@@ -540,6 +540,312 @@ show_key_details() {
     echo "--------------------------------------"
 }
 
+# 14. Comprehensive security lint/audit
+lint_sources() {
+    echo "APT Security Lint - Checking Best Practices"
+    echo "============================================"
+    echo ""
+    
+    local issues_found=0
+    local warnings_found=0
+    local checks_passed=0
+    
+    # Check 1: Legacy keyring file
+    echo "[CHECK 1] Deprecated keyring file"
+    if [[ -f "/etc/apt/trusted.gpg" ]]; then
+        local keycount=$(gpg --no-default-keyring --keyring /etc/apt/trusted.gpg --list-keys 2>/dev/null | grep -c "^pub" || echo 0)
+        if [[ $keycount -gt 0 ]]; then
+            echo "  [FAIL] Found $keycount key(s) in deprecated /etc/apt/trusted.gpg"
+            echo "         Recommendation: Migrate keys to /etc/apt/keyrings/"
+            echo ""
+            issues_found=$((issues_found + 1))
+        else
+            echo "  [PASS] No keys in deprecated keyring file"
+            echo ""
+            checks_passed=$((checks_passed + 1))
+        fi
+    else
+        echo "  [PASS] Deprecated keyring file does not exist"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 2: Legacy .list files without explicit keys
+    echo "[CHECK 2] Legacy .list files (should migrate to .sources)"
+    local list_count=0
+    for file in "$SOURCES_DIR"/*.list; do
+        [[ -f "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        echo "  [WARN] Legacy format: $file"
+        echo "         Recommendation: Convert to .sources format with explicit Signed-By"
+        list_count=$((list_count + 1))
+    done
+    if [[ $list_count -gt 0 ]]; then
+        echo "         Found $list_count legacy .list file(s)"
+        echo ""
+        warnings_found=$((warnings_found + 1))
+    else
+        echo "  [PASS] No legacy .list files in use"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 3: Sources without explicit keys
+    echo "[CHECK 3] Sources without explicit key references"
+    local no_key_count=0
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        
+        local has_key=0
+        while IFS='|' read -r url key; do
+            [[ -n "$url" ]] || continue
+            if [[ "$key" == "none" ]]; then
+                echo "  [FAIL] No key specified: $url"
+                echo "         File: $file"
+                echo "         Recommendation: Add Signed-By field"
+                no_key_count=$((no_key_count + 1))
+                has_key=0
+            else
+                has_key=1
+            fi
+        done < <(parse_deb822_stanzas "$file")
+    done
+    if [[ $no_key_count -gt 0 ]]; then
+        echo "         Found $no_key_count source(s) without keys"
+        echo ""
+        issues_found=$((issues_found + 1))
+    else
+        echo "  [PASS] All .sources files have explicit keys"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 4: Missing key files
+    echo "[CHECK 4] Missing or unreadable key files"
+    local missing_count=0
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        
+        while IFS='|' read -r url key; do
+            [[ -n "$url" ]] || continue
+            if [[ "$key" != "none" ]] && [[ ! "$key" =~ ^-----BEGIN ]]; then
+                if [[ ! -f "$key" ]]; then
+                    echo "  [FAIL] Missing key: $key"
+                    echo "         Required by: $url"
+                    echo "         File: $file"
+                    missing_count=$((missing_count + 1))
+                elif [[ ! -r "$key" ]]; then
+                    echo "  [FAIL] Unreadable key: $key"
+                    echo "         Required by: $url"
+                    echo "         File: $file"
+                    missing_count=$((missing_count + 1))
+                fi
+            fi
+        done < <(parse_deb822_stanzas "$file")
+    done
+    if [[ $missing_count -gt 0 ]]; then
+        echo "         Found $missing_count missing/unreadable key(s)"
+        echo ""
+        issues_found=$((issues_found + 1))
+    else
+        echo "  [PASS] All referenced key files exist and are readable"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 5: Keys in old locations (trusted.gpg.d)
+    echo "[CHECK 5] Keys in legacy trusted.gpg.d directory"
+    local old_keys=0
+    for keyfile in /etc/apt/trusted.gpg.d/*.gpg; do
+        [[ -f "$keyfile" ]] || continue
+        echo "  [WARN] Old format key: $keyfile"
+        old_keys=$((old_keys + 1))
+    done
+    for keyfile in /etc/apt/trusted.gpg.d/*.asc; do
+        [[ -f "$keyfile" ]] || continue
+        echo "  [WARN] Old format key: $keyfile"
+        old_keys=$((old_keys + 1))
+    done
+    if [[ $old_keys -gt 0 ]]; then
+        echo "         Found $old_keys key(s) in legacy location"
+        echo "         Recommendation: Migrate to /etc/apt/keyrings/ with explicit Signed-By"
+        echo ""
+        warnings_found=$((warnings_found + 1))
+    else
+        echo "  [PASS] No keys in legacy trusted.gpg.d directory"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 6: Expired keys
+    echo "[CHECK 6] Expired GPG keys"
+    local expired_count=0
+    local now=$(date +%s)
+    
+    for keyfile in /etc/apt/keyrings/*.gpg /usr/share/keyrings/*.gpg; do
+        [[ -f "$keyfile" ]] || continue
+        
+        while IFS=: read -r type trust length algo keyid date expires rest; do
+            if [[ "$type" == "pub" ]] && [[ -n "$expires" ]] && [[ "$expires" -lt "$now" ]]; then
+                echo "  [FAIL] Expired key: $keyfile"
+                echo "         Key ID: $keyid"
+                echo "         Expired: $(date -d @$expires 2>/dev/null || echo $expires)"
+                expired_count=$((expired_count + 1))
+            fi
+        done < <(gpg --no-default-keyring --keyring "$keyfile" --list-keys --with-colons 2>/dev/null || true)
+    done
+    
+    if [[ $expired_count -gt 0 ]]; then
+        echo "         Found $expired_count expired key(s)"
+        echo "         Recommendation: Update or remove expired keys"
+        echo ""
+        issues_found=$((issues_found + 1))
+    else
+        echo "  [PASS] No expired keys found"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 7: Keys expiring soon (within 30 days)
+    echo "[CHECK 7] Keys expiring soon (within 30 days)"
+    local expiring_count=0
+    local thirty_days=$((now + 2592000))
+    
+    for keyfile in /etc/apt/keyrings/*.gpg /usr/share/keyrings/*.gpg; do
+        [[ -f "$keyfile" ]] || continue
+        
+        while IFS=: read -r type trust length algo keyid date expires rest; do
+            if [[ "$type" == "pub" ]] && [[ -n "$expires" ]] && [[ "$expires" -gt "$now" ]] && [[ "$expires" -lt "$thirty_days" ]]; then
+                echo "  [WARN] Key expiring soon: $keyfile"
+                echo "         Key ID: $keyid"
+                echo "         Expires: $(date -d @$expires 2>/dev/null || echo $expires)"
+                expiring_count=$((expiring_count + 1))
+            fi
+        done < <(gpg --no-default-keyring --keyring "$keyfile" --list-keys --with-colons 2>/dev/null || true)
+    done
+    
+    if [[ $expiring_count -gt 0 ]]; then
+        echo "         Found $expiring_count key(s) expiring soon"
+        echo "         Recommendation: Plan to update these keys"
+        echo ""
+        warnings_found=$((warnings_found + 1))
+    else
+        echo "  [PASS] No keys expiring in the next 30 days"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 8: HTTP sources (should use HTTPS)
+    echo "[CHECK 8] Sources using HTTP instead of HTTPS"
+    local http_count=0
+    
+    for file in "$SOURCES_DIR"/*.list; do
+        [[ -f "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        while read -r line; do
+            [[ "$line" =~ ^deb ]] || continue
+            if [[ "$line" =~ http:// ]] && [[ ! "$line" =~ (archive\.ubuntu\.com|security\.ubuntu\.com) ]]; then
+                local url=$(echo "$line" | awk '{print $2}')
+                echo "  [WARN] HTTP source: $url"
+                echo "         File: $file"
+                http_count=$((http_count + 1))
+            fi
+        done < "$file"
+    done
+    
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        
+        while IFS='|' read -r url key; do
+            [[ -n "$url" ]] || continue
+            if [[ "$url" =~ ^http:// ]] && [[ ! "$url" =~ (archive\.ubuntu\.com|security\.ubuntu\.com) ]]; then
+                echo "  [WARN] HTTP source: $url"
+                echo "         File: $file"
+                http_count=$((http_count + 1))
+            fi
+        done < <(parse_deb822_stanzas "$file")
+    done
+    
+    if [[ $http_count -gt 0 ]]; then
+        echo "         Found $http_count HTTP source(s)"
+        echo "         Recommendation: Use HTTPS for third-party sources"
+        echo ""
+        warnings_found=$((warnings_found + 1))
+    else
+        echo "  [PASS] No third-party HTTP sources found"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 9: Weak key algorithms
+    echo "[CHECK 9] Weak key algorithms (RSA < 2048 bits)"
+    local weak_count=0
+    
+    for keyfile in /etc/apt/keyrings/*.gpg /usr/share/keyrings/*.gpg /etc/apt/trusted.gpg.d/*.gpg; do
+        [[ -f "$keyfile" ]] || continue
+        
+        while IFS=: read -r type trust length algo keyid rest; do
+            if [[ "$type" == "pub" ]] && [[ "$algo" == "1" ]] && [[ "$length" -lt 2048 ]]; then
+                echo "  [FAIL] Weak RSA key: $keyfile"
+                echo "         Key ID: $keyid"
+                echo "         Length: ${length} bits (should be >= 2048)"
+                weak_count=$((weak_count + 1))
+            fi
+        done < <(gpg --no-default-keyring --keyring "$keyfile" --list-keys --with-colons 2>/dev/null || true)
+    done
+    
+    if [[ $weak_count -gt 0 ]]; then
+        echo "         Found $weak_count weak key(s)"
+        echo "         Recommendation: Replace with stronger keys"
+        echo ""
+        issues_found=$((issues_found + 1))
+    else
+        echo "  [PASS] No weak keys found"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Summary
+    echo "============================================"
+    echo "LINT SUMMARY"
+    echo "============================================"
+    echo "Checks passed:      $checks_passed"
+    echo "Warnings:           $warnings_found"
+    echo "Critical issues:    $issues_found"
+    echo ""
+    
+    if [[ $issues_found -gt 0 ]]; then
+        echo "Result: FAILED - Critical security issues found"
+        echo ""
+        echo "Recommended actions:"
+        echo "1. Fix critical issues immediately"
+        echo "2. Run 'apt-man --check-keys' for detailed key status"
+        echo "3. Run 'apt-man --refresh-keys' to update keys"
+        echo "4. Migrate legacy configurations to modern formats"
+        return 1
+    elif [[ $warnings_found -gt 0 ]]; then
+        echo "Result: PASSED WITH WARNINGS"
+        echo ""
+        echo "Consider addressing warnings to improve security:"
+        echo "1. Migrate legacy .list files to .sources format"
+        echo "2. Move keys from trusted.gpg.d/ to /etc/apt/keyrings/"
+        echo "3. Use HTTPS for all third-party sources"
+        echo "4. Plan for key renewals before expiration"
+        return 0
+    else
+        echo "Result: EXCELLENT - All security checks passed!"
+        echo ""
+        echo "Your APT configuration follows current best practices."
+        return 0
+    fi
+}
+
 # Show help message
 show_help() {
     cat << 'EOF'
@@ -561,6 +867,7 @@ Key Management:
   --check-keys                 check for missing or problematic keys
   --refresh-keys               refresh keys from keyservers
   --key-info KEYFILE           show detailed info about a key
+  --lint                       comprehensive security audit of sources and keys
 
 General:
   --help                       display this help and exit
@@ -577,6 +884,7 @@ Examples:
   apt-man --list                List all sources
   apt-man --list --keys         List sources with their keys
   apt-man --disable 5           Disable source ID 5
+  apt-man --lint                Run comprehensive security audit
   apt-man --check-keys          Check for key problems
   apt-man --key-info /etc/apt/keyrings/microsoft.gpg
 
@@ -664,6 +972,9 @@ case "${1:-}" in
     --key-info)
         [[ $# -eq 2 ]] || { echo "Usage: $0 --key-info <keyfile>"; exit 1; }
         show_key_details "$2"
+        ;;
+    --lint)
+        lint_sources
         ;;
     "")
         echo "apt-man: missing operand" >&2
