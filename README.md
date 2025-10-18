@@ -188,10 +188,17 @@ Show installed packages from a source:
 apt-man installed 3
 ```
 
-Remove all packages from a source:
+Remove all packages from a source and optionally disable the source:
 ```bash
 apt-man remove 3
 ```
+
+This command provides a comprehensive, fail-safe removal workflow:
+1. Lists all installed packages from the source
+2. Prompts to remove packages (y/N - defaults to No)
+3. Prompts to disable the source file (y/N - defaults to No)
+4. Prompts to remove associated keys with warning (y/N - defaults to No)
+5. All steps require explicit user confirmation
 
 ### Release Upgrade
 
@@ -334,19 +341,22 @@ apt-man enable 7
 sudo apt update
 ```
 
-### Example 3: Clean Up Before Removing a Source
+### Example 3: Clean Up and Remove a PPA
 
 ```bash
 # Show what's installed from the source
 apt-man installed 4
 
-# Remove all packages from that source
+# Comprehensive removal with prompts at each step
 apt-man remove 4
+# This will:
+# 1. List installed packages and ask to remove them (y/N)
+# 2. Ask to disable the source file (y/N)
+# 3. Ask to remove associated keys (y/N)
+# All prompts default to No for safety
 
-# Disable the source
-apt-man disable 4
-
-# Remove the source file manually if needed
+# Update package lists after removal
+sudo apt update
 ```
 
 ### Example 4: Fix Security Issues
