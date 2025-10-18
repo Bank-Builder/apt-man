@@ -8,7 +8,7 @@ COMPLETIONDIR = $(PREFIX)/share/bash-completion/completions
 
 # Package information
 PACKAGE_NAME = apt-man
-VERSION = $(shell git describe --tags --always --dirty 2>/dev/null || echo "1.0")
+VERSION = $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' | sed 's/-dirty$$//' | sed 's/-/~/g' || echo "1.0")
 ARCHITECTURE = all
 MAINTAINER = Bank-Builder <bank-builder@example.com>
 DESCRIPTION = APT Source and Key Manager
