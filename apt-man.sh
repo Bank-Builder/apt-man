@@ -198,12 +198,25 @@ remove_packages() {
     local id="$1"
     local url
     url=$(grep "^$id|" /tmp/sources_index | cut -d'|' -f3)
-    echo "Removing all packages installed from $url..."
+    echo "Finding packages installed from $url..."
+    
+    local packages=()
     for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
         if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
-            sudo apt-get remove -y "$pkg"
+            packages+=("$pkg")
         fi
     done
+    
+    if [ ${#packages[@]} -eq 0 ]; then
+        echo "No packages found from this source."
+        return 0
+    fi
+    
+    echo "Found ${#packages[@]} package(s) from this source:"
+    printf '  %s\n' "${packages[@]}"
+    echo ""
+    echo "Running: sudo apt remove ${packages[*]}"
+    sudo apt remove "${packages[@]}"
 }
 
 # 5. Upgrade all sources to a new codename
