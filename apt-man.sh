@@ -1430,6 +1430,89 @@ lint_fix() {
         echo ""
     fi
     
+    # Check for unreachable sources
+    echo "Scanning for unreachable sources..."
+    local unreachable_sources=()
+    
+    # Re-scan sources to get latest state
+    rm -f /tmp/sources_index
+    list_sources > /dev/null
+    
+    while IFS='|' read -r id file url rest; do
+        # Skip empty lines
+        [[ -z "$url" ]] && continue
+        
+        # Test if URL is reachable
+        if ! curl -sf --max-time 5 --head "$url" >/dev/null 2>&1; then
+            unreachable_sources+=("$id|$file|$url")
+        fi
+    done < /tmp/sources_index
+    
+    if [[ ${#unreachable_sources[@]} -gt 0 ]]; then
+        echo "Found ${#unreachable_sources[@]} unreachable source(s)"
+        echo ""
+        
+        for source_info in "${unreachable_sources[@]}"; do
+            IFS='|' read -r id file url <<< "$source_info"
+            
+            echo "Source ID $id: $url"
+            echo "  File: $file"
+            echo "  Status: UNREACHABLE (timeout after 5s)"
+            echo ""
+            echo "  Options:"
+            echo "    d) Disable this source (rename to .disabled)"
+            echo "    r) Remove source file completely"
+            echo "    s) Skip (leave as is)"
+            read -p "  Action? [d/r/S] " -n 1 -r
+            echo
+            
+            if [[ $REPLY =~ ^[Dd]$ ]]; then
+                # Disable the source
+                local disabled_file="${file}.disabled"
+                
+                # Backup first
+                sudo cp "$file" "$backup_dir/$(basename "$file")"
+                
+                if sudo mv "$file" "$disabled_file" 2>/dev/null; then
+                    echo "  SUCCESS: Source disabled"
+                    echo "  Moved to: $disabled_file"
+                    fixes_applied=$((fixes_applied + 1))
+                else
+                    echo "  ERROR: Failed to disable source"
+                    fixes_failed=$((fixes_failed + 1))
+                fi
+            elif [[ $REPLY =~ ^[Rr]$ ]]; then
+                echo "  WARNING: This will permanently delete the source file!"
+                read -p "  Are you sure? [y/N] " -n 1 -r
+                echo
+                
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    # Backup first
+                    sudo cp "$file" "$backup_dir/$(basename "$file")"
+                    
+                    if sudo rm "$file" 2>/dev/null; then
+                        echo "  SUCCESS: Source file removed"
+                        echo "  Backup saved in: $backup_dir"
+                        fixes_applied=$((fixes_applied + 1))
+                    else
+                        echo "  ERROR: Failed to remove source"
+                        fixes_failed=$((fixes_failed + 1))
+                    fi
+                else
+                    echo "  CANCELLED"
+                    fixes_skipped=$((fixes_skipped + 1))
+                fi
+            else
+                echo "  SKIPPED"
+                fixes_skipped=$((fixes_skipped + 1))
+            fi
+            echo ""
+        done
+    else
+        echo "All sources are reachable"
+        echo ""
+    fi
+    
     # Summary
     echo "============================================"
     echo "AUTO-FIX SUMMARY"
@@ -1610,7 +1693,7 @@ Commands:
   list-disabled                list disabled sources
   upgrade-source OLD NEW       upgrade sources to new release
   lint                         comprehensive security audit of sources and keys
-  lint --fix                   interactively fix security warnings
+  lint --fix                   interactively fix warnings (HTTP, keys, unreachable)
   
   migrate ID                   convert .list file to .sources format
   use-https ID                 convert HTTP source to HTTPS
@@ -1641,6 +1724,7 @@ Examples:
   apt-man use-https 7          Convert source ID 7 to HTTPS
   apt-man migrate 3            Convert .list file to .sources format
   apt-man lint                 Run comprehensive security audit
+  apt-man lint --fix           Interactively fix security warnings
   apt-man keys --check         Check for key problems
   apt-man keys --renewal       Show keys expiring soon
   apt-man keys --move /etc/apt/trusted.gpg.d/old.gpg

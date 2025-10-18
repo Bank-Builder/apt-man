@@ -206,6 +206,8 @@ Scans for HTTP sources and tests if HTTPS is available before converting
 @item
 Identifies legacy keys in @file{trusted.gpg.d/} that should be moved
 @item
+Detects unreachable sources and offers to disable or remove them
+@item
 Prompts for confirmation before each change
 @item
 Creates timestamped backup directory for all modified files
@@ -217,6 +219,14 @@ Provides clear instructions for required manual steps
 Shows summary of applied, skipped, and failed fixes
 @end itemize
 
+@strong{Unreachable Sources:}
+When an unreachable source is detected, you can choose to:
+@itemize @bullet
+@item @strong{d)} Disable the source (rename to .disabled) - safe, reversible
+@item @strong{r)} Remove the source file completely - permanent deletion with backup
+@item @strong{s)} Skip and leave as is
+@end itemize
+
 @strong{Safety Features:}
 @itemize @bullet
 @item All changes require explicit confirmation
@@ -224,6 +234,7 @@ Shows summary of applied, skipped, and failed fixes
 @item HTTPS URLs are tested before conversion
 @item Instructions provided for complex operations
 @item No changes to main @file{sources.list}
+@item Removal requires double confirmation
 @end itemize
 
 Example:

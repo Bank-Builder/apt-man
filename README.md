@@ -83,7 +83,7 @@ Run comprehensive security audit:
 apt-man lint
 ```
 
-Interactively fix security warnings:
+Interactively fix security warnings (HTTP sources, legacy keys, unreachable sources):
 ```bash
 apt-man lint --fix
 ```

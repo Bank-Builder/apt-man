@@ -182,11 +182,21 @@ File: apt-man.info,  Node: Source Management,  Next: Key Management,  Prev: Gett
           converting
         • Identifies legacy keys in ‘trusted.gpg.d/’ that should be
           moved
+        • Detects unreachable sources and offers to disable or remove
+          them
         • Prompts for confirmation before each change
         • Creates timestamped backup directory for all modified files
         • Tests URL reachability before making changes
         • Provides clear instructions for required manual steps
         • Shows summary of applied, skipped, and failed fixes
+
+     *Unreachable Sources:* When an unreachable source is detected, you
+     can choose to:
+        • *d)* Disable the source (rename to .disabled) - safe,
+          reversible
+        • *r)* Remove the source file completely - permanent deletion
+          with backup
+        • *s)* Skip and leave as is
 
      *Safety Features:*
         • All changes require explicit confirmation
@@ -194,6 +204,7 @@ File: apt-man.info,  Node: Source Management,  Next: Key Management,  Prev: Gett
         • HTTPS URLs are tested before conversion
         • Instructions provided for complex operations
         • No changes to main ‘sources.list’
+        • Removal requires double confirmation
 
      Example:
           sudo apt-man lint --fix
@@ -577,13 +588,13 @@ Node: Top445
 Node: Introduction1506
 Node: Getting Started2356
 Node: Source Management2920
-Node: Key Management7930
-Node: Key Formats10831
-Node: Source Formats12456
-Node: Examples13471
-Node: Security15844
-Node: Files17311
-Node: Index18223
+Node: Key Management8378
+Node: Key Formats11279
+Node: Source Formats12904
+Node: Examples13919
+Node: Security16292
+Node: Files17759
+Node: Index18671
 
 End Tag Table
 
