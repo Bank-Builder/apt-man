@@ -1091,6 +1091,66 @@ lint_sources() {
         checks_passed=$((checks_passed + 1))
     fi
     
+    # Check 15: Development/testing repositories
+    echo "[CHECK 15] Development or testing repositories"
+    local dev_count=0
+    
+    # Keywords indicating development repos (with word boundaries)
+    local dev_keywords="-proposed|-testing|/testing/|unstable|experimental|-devel|-alpha|-beta|-rc[0-9]|/nightly/"
+    
+    for file in "$SOURCES_DIR"/*.list; do
+        [[ -f "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        while read -r line; do
+            [[ "$line" =~ ^deb ]] || continue
+            if [[ "$line" =~ ($dev_keywords) ]]; then
+                echo "  [WARN] Development repository: $file"
+                echo "         Line: $line"
+                echo "         Type: ${BASH_REMATCH[1]}"
+                dev_count=$((dev_count + 1))
+            fi
+        done < "$file"
+    done
+    
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^Suites:[[:space:]]*(.+)$ ]]; then
+                local suites="${BASH_REMATCH[1]}"
+                if [[ "$suites" =~ ($dev_keywords) ]]; then
+                    echo "  [WARN] Development repository: $file"
+                    echo "         Suites: $suites"
+                    echo "         Type: ${BASH_REMATCH[1]}"
+                    dev_count=$((dev_count + 1))
+                fi
+            fi
+            if [[ "$line" =~ ^URIs:[[:space:]]*(.+)$ ]]; then
+                local uri="${BASH_REMATCH[1]}"
+                if [[ "$uri" =~ ($dev_keywords) ]]; then
+                    echo "  [WARN] Development repository: $file"
+                    echo "         URI: $uri"
+                    echo "         Type: ${BASH_REMATCH[1]}"
+                    dev_count=$((dev_count + 1))
+                fi
+            fi
+        done < "$file"
+    done
+    
+    if [[ $dev_count -gt 0 ]]; then
+        echo "         Found $dev_count development/testing repository(ies)"
+        echo "         Recommendation: Avoid development repos on production systems"
+        echo "         These may contain unstable or untested packages"
+        echo ""
+        warnings_found=$((warnings_found + 1))
+    else
+        echo "  [PASS] No development/testing repositories found"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
     # Summary
     echo "============================================"
     echo "LINT SUMMARY"
