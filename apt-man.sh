@@ -191,18 +191,23 @@ show_packages() {
     
     # Try the detected codename first
     local packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages"
-    local packages=$(curl -s "$packages_url" 2>/dev/null)
+    local packages=$(timeout 5 curl -s "$packages_url" 2>/dev/null)
     
     # If standard structure fails, try compressed Packages files (like PPAs)
     if [[ ! "$packages" =~ ^Package: ]]; then
         packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages.gz"
-        packages=$(curl -s "$packages_url" 2>/dev/null | gunzip 2>/dev/null)
+        local temp_gz="/tmp/apt-man-packages-$$.gz"
+        timeout 5 curl -s "$packages_url" -o "$temp_gz" 2>/dev/null
+        if [[ -f "$temp_gz" ]] && [[ -s "$temp_gz" ]]; then
+            packages=$(gunzip -c "$temp_gz" 2>/dev/null || echo "")
+            rm -f "$temp_gz"
+        fi
     fi
     
     # If compressed fails, try flat structure (like NVIDIA)
     if [[ ! "$packages" =~ ^Package: ]]; then
         packages_url="${url}/Packages"
-        packages=$(curl -s "$packages_url" 2>/dev/null)
+        packages=$(timeout 5 curl -s "$packages_url" 2>/dev/null)
     fi
     
     # Check if we got valid package data (starts with Package:)
@@ -262,18 +267,23 @@ show_installed() {
     # Get available packages from the repository
     # Try standard structure first
     local packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages"
-    local available_packages=$(curl -s "$packages_url" 2>/dev/null)
+    local available_packages=$(timeout 5 curl -s "$packages_url" 2>/dev/null)
     
     # If standard structure fails, try compressed Packages files (like PPAs)
     if [[ ! "$available_packages" =~ ^Package: ]]; then
         packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages.gz"
-        available_packages=$(curl -s "$packages_url" 2>/dev/null | gunzip 2>/dev/null)
+        local temp_gz="/tmp/apt-man-packages-$$.gz"
+        timeout 5 curl -s "$packages_url" -o "$temp_gz" 2>/dev/null
+        if [[ -f "$temp_gz" ]] && [[ -s "$temp_gz" ]]; then
+            available_packages=$(gunzip -c "$temp_gz" 2>/dev/null || echo "")
+            rm -f "$temp_gz"
+        fi
     fi
     
     # If compressed fails, try flat structure (like NVIDIA)
     if [[ ! "$available_packages" =~ ^Package: ]]; then
         packages_url="${url}/Packages"
-        available_packages=$(curl -s "$packages_url" 2>/dev/null)
+        available_packages=$(timeout 5 curl -s "$packages_url" 2>/dev/null)
     fi
     
     if [[ ! "$available_packages" =~ ^Package: ]]; then
@@ -287,7 +297,7 @@ show_installed() {
         
         echo "Checking $total_pkgs packages... (this may take a moment)"
         
-        for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
+    for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
             checked=$((checked + 1))
             
             # Show progress every 100 packages
@@ -295,12 +305,12 @@ show_installed() {
                 echo -ne "Checked $checked/$total_pkgs packages\r"
             fi
             
-            if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
+        if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
                 echo -ne "\r\033[K"  # Clear progress line
-                echo "$pkg"
+            echo "$pkg"
                 found_packages=$((found_packages + 1))
-            fi
-        done
+        fi
+    done
         
         echo -ne "\r\033[K"  # Clear the progress line
         
@@ -385,7 +395,7 @@ remove_packages() {
             local checked=0
             local last_percent=-1
             
-            for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
+    for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
                 checked=$((checked + 1))
                 local percent=$((checked * 100 / total_pkgs))
                 
@@ -395,10 +405,10 @@ remove_packages() {
                     last_percent=$percent
                 fi
                 
-                if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
+        if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
                     packages+=("$pkg")
-                fi
-            done
+        fi
+    done
             
             echo -ne "\r\033[K"  # Clear the progress line
             echo "Package search complete."
