@@ -454,7 +454,7 @@ GNU General Public License v3.0 or later
 
 ## Author
 
-Written by Andrew
+Written by Bank-Builder
 
 ## Reporting Bugs
 

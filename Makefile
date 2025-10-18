@@ -6,11 +6,19 @@ MANDIR = $(PREFIX)/share/man/man1
 INFODIR = $(PREFIX)/share/info
 COMPLETIONDIR = $(PREFIX)/share/bash-completion/completions
 
+# Package information
+PACKAGE_NAME = apt-man
+VERSION = 1.0
+ARCHITECTURE = all
+MAINTAINER = Bank-Builder <bank-builder@example.com>
+DESCRIPTION = APT Source and Key Manager
+HOMEPAGE = https://github.com/Bank-Builder/apt-man
+
 INSTALL = install
 INSTALL_PROGRAM = $(INSTALL) -m 0755
 INSTALL_DATA = $(INSTALL) -m 0644
 
-.PHONY: all install install-bin install-man install-info install-completion uninstall clean help
+.PHONY: all install install-bin install-man install-info install-completion uninstall clean help deb
 
 all: apt-man.1.gz apt-man.info
 
@@ -24,6 +32,7 @@ help:
 	@echo "  install-completion  Install bash completion only"
 	@echo "  uninstall           Remove installed files"
 	@echo "  clean               Remove built files"
+	@echo "  deb                 Create .deb package for Debian/Ubuntu"
 	@echo "  test-man            View man page with 'man'"
 	@echo "  test-info           View info page with 'info'"
 	@echo ""
@@ -33,6 +42,8 @@ help:
 	@echo "  MANDIR=$(MANDIR)"
 	@echo "  INFODIR=$(INFODIR)"
 	@echo "  COMPLETIONDIR=$(COMPLETIONDIR)"
+	@echo "  VERSION=$(VERSION)"
+	@echo "  ARCHITECTURE=$(ARCHITECTURE)"
 
 # Build compressed man page
 apt-man.1.gz: apt-man.1
@@ -87,6 +98,8 @@ uninstall:
 # Clean built files
 clean:
 	rm -f apt-man.1.gz apt-man.info
+	rm -f *.deb
+	rm -rf debian/
 
 # Test man page locally
 test-man: apt-man.1
@@ -95,4 +108,70 @@ test-man: apt-man.1
 # Test info page locally
 test-info: apt-man.info
 	info -f apt-man.info
+
+# Create .deb package
+deb: apt-man.1.gz apt-man.info
+	@echo "Creating .deb package..."
+	@mkdir -p debian/DEBIAN
+	@mkdir -p debian/usr/bin
+	@mkdir -p debian/usr/share/man/man1
+	@mkdir -p debian/usr/share/info
+	@mkdir -p debian/usr/share/bash-completion/completions
+	@mkdir -p debian/usr/share/doc/apt-man
+	
+	# Copy files to package structure
+	cp apt-man.sh debian/usr/bin/apt-man
+	chmod 755 debian/usr/bin/apt-man
+	cp apt-man.1.gz debian/usr/share/man/man1/
+	cp apt-man.info debian/usr/share/info/
+	cp apt-man-completion.bash debian/usr/share/bash-completion/completions/apt-man
+	cp README.md debian/usr/share/doc/apt-man/
+	cp LICENSE debian/usr/share/doc/apt-man/
+	
+	# Create control file
+	@echo "Package: $(PACKAGE_NAME)" > debian/DEBIAN/control
+	@echo "Version: $(VERSION)" >> debian/DEBIAN/control
+	@echo "Section: admin" >> debian/DEBIAN/control
+	@echo "Priority: optional" >> debian/DEBIAN/control
+	@echo "Architecture: $(ARCHITECTURE)" >> debian/DEBIAN/control
+	@echo "Maintainer: $(MAINTAINER)" >> debian/DEBIAN/control
+	@echo "Description: $(DESCRIPTION)" >> debian/DEBIAN/control
+	@echo " A comprehensive command-line tool for managing APT package sources," >> debian/DEBIAN/control
+	@echo " PPAs, and GPG keys on Ubuntu and Debian-based systems." >> debian/DEBIAN/control
+	@echo " Features include:" >> debian/DEBIAN/control
+	@echo "  - Source management (list, enable, disable, upgrade)" >> debian/DEBIAN/control
+	@echo "  - Key management (list, check, refresh, move)" >> debian/DEBIAN/control
+	@echo "  - Security auditing (22 comprehensive checks)" >> debian/DEBIAN/control
+	@echo "  - Package operations (fix-deps, cache management, held packages)" >> debian/DEBIAN/control
+	@echo "  - Duplicate source detection and removal" >> debian/DEBIAN/control
+	@echo "  - Interactive fixes for common issues" >> debian/DEBIAN/control
+	@echo " Homepage: $(HOMEPAGE)" >> debian/DEBIAN/control
+	
+	# Create postinst script
+	@echo "#!/bin/bash" > debian/DEBIAN/postinst
+	@echo "set -e" >> debian/DEBIAN/postinst
+	@echo "if command -v install-info >/dev/null 2>&1; then" >> debian/DEBIAN/postinst
+	@echo "    install-info --info-dir=/usr/share/info /usr/share/info/apt-man.info 2>/dev/null || true" >> debian/DEBIAN/postinst
+	@echo "fi" >> debian/DEBIAN/postinst
+	@echo "echo 'apt-man installed successfully!'" >> debian/DEBIAN/postinst
+	@echo "echo 'Run: source /usr/share/bash-completion/completions/apt-man'" >> debian/DEBIAN/postinst
+	@echo "echo 'to enable bash completion in your current shell.'" >> debian/DEBIAN/postinst
+	chmod 755 debian/DEBIAN/postinst
+	
+	# Create prerm script
+	@echo "#!/bin/bash" > debian/DEBIAN/prerm
+	@echo "set -e" >> debian/DEBIAN/prerm
+	@echo "if command -v install-info >/dev/null 2>&1; then" >> debian/DEBIAN/prerm
+	@echo "    install-info --delete --info-dir=/usr/share/info /usr/share/info/apt-man.info 2>/dev/null || true" >> debian/DEBIAN/prerm
+	@echo "fi" >> debian/DEBIAN/prerm
+	chmod 755 debian/DEBIAN/prerm
+	
+	# Build the package
+	dpkg-deb --build debian $(PACKAGE_NAME)_$(VERSION)_$(ARCHITECTURE).deb
+	
+	# Clean up
+	rm -rf debian/
+	
+	@echo "Package created: $(PACKAGE_NAME)_$(VERSION)_$(ARCHITECTURE).deb"
+	@echo "Install with: sudo dpkg -i $(PACKAGE_NAME)_$(VERSION)_$(ARCHITECTURE).deb"
 

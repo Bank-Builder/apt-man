@@ -1,0 +1,50 @@
+# Build artifacts
+*.deb
+*.tar.gz
+*.tar.bz2
+*.zip
+
+# Documentation build files
+*.1.gz
+*.info
+*.texi~
+
+# Temporary files
+/tmp/
+*.tmp
+*.temp
+*~
+
+# Backup files
+*.backup
+*.bak
+*.orig
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local test files
+test-*
+debug-*
+
+# Package build directories
+debian/
+build/
+dist/
+
+# Log files
+*.log
+
+# Generated source index (temporary file used by apt-man)
+/tmp/sources_index
+/tmp/apt-man-*
+
+# APT backup directories created by apt-man
+/tmp/apt-man-backup-*
