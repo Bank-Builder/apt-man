@@ -1381,7 +1381,7 @@ lint_fix() {
     echo "Scanning for legacy keys in trusted.gpg.d/..."
     local legacy_keys=()
     
-    for keyfile in /etc/apt/trusted.gpg.d/*.gpg; do
+    for keyfile in /etc/apt/trusted.gpg.d/*.gpg /etc/apt/trusted.gpg.d/*.asc; do
         [[ -f "$keyfile" ]] || continue
         legacy_keys+=("$keyfile")
     done
