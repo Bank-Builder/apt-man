@@ -175,8 +175,48 @@ show_packages() {
     url=$(grep "^$id|" /tmp/sources_index | cut -d'|' -f3)
     echo "Packages in $url:"
     echo "--------------------------------------"
-    curl -s "${url}/dists/${CODENAME}/main/binary-amd64/Packages" \
-        | grep -E '^Package: ' | awk '{print $2}'
+    
+    # Extract codename from URL if it contains a version number
+    local repo_codename="$CODENAME"
+    if [[ "$url" =~ /ubuntu/([0-9]+\.[0-9]+)/ ]]; then
+        local ubuntu_version="${BASH_REMATCH[1]}"
+        case "$ubuntu_version" in
+            20.04) repo_codename="focal" ;;
+            22.04) repo_codename="jammy" ;;
+            24.04) repo_codename="noble" ;;
+            25.04) repo_codename="plucky" ;;
+            *) repo_codename="$CODENAME" ;;
+        esac
+    fi
+    
+    # Try the detected codename first
+    local packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages"
+    local packages=$(curl -s "$packages_url" 2>/dev/null)
+    
+    # Check if we got valid package data (starts with Package:)
+    if [[ "$packages" =~ ^Package: ]]; then
+        echo "$packages" | grep -E '^Package: ' | awk '{print $2}'
+    else
+        echo "No packages found at: $packages_url"
+        echo ""
+        echo "Trying alternative paths..."
+        
+        # Try common alternative paths
+        local alternatives=(
+            "${url}/dists/${CODENAME}/main/binary-amd64/Packages"
+            "${url}/dists/main/binary-amd64/Packages"
+            "${url}/dists/${repo_codename}/Packages"
+        )
+        
+        for alt_url in "${alternatives[@]}"; do
+            echo "Trying: $alt_url"
+            local alt_packages=$(curl -s "$alt_url" 2>/dev/null)
+            if [[ "$alt_packages" =~ ^Package: ]]; then
+                echo "$alt_packages" | grep -E '^Package: ' | awk '{print $2}'
+                break
+            fi
+        done
+    fi
 }
 
 # 3. Show installed packages from a source
@@ -2275,6 +2315,8 @@ case "$COMMAND" in
     
     show)
         [[ $# -eq 2 ]] || { echo "Usage: apt-man show <id>"; exit 1; }
+        rm -f /tmp/sources_index
+        list_sources > /dev/null
         show_packages "$2"
         ;;
     
