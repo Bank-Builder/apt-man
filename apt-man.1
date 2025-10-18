@@ -48,6 +48,16 @@ For example, to upgrade from "noble" to "oracular".
 Comprehensive security audit of all sources and keys. Performs 17 different
 security checks including key validation, source configuration, and file permissions.
 
+.SS "Security Fix Commands"
+.TP
+.B migrate \fIID\fR
+Convert a legacy .list file to modern .sources (DEB822) format. Currently shows
+manual steps for migration.
+.TP
+.B use-https \fIID\fR
+Convert an HTTP source to HTTPS. Tests URL reachability before applying changes
+and creates a backup file.
+
 .SS "Key Management Commands"
 .TP
 .B keys [\-\-list]
@@ -65,6 +75,14 @@ Only affects keys in /etc/apt/keyrings/. System keyrings are updated via APT pac
 .B keys \-\-info \fIKEYFILE\fR
 Show detailed information about a specific GPG key file, including key ID,
 algorithm, creation date, expiration date, and status.
+.TP
+.B keys \-\-move \fIKEYFILE\fR
+Move a legacy key from /etc/apt/trusted.gpg.d/ to the modern location
+/etc/apt/keyrings/. Provides instructions for updating source files.
+.TP
+.B keys \-\-renewal
+Show all GPG keys that will expire in the next 90 days, helping plan for
+key renewals before they cause APT failures.
 
 .SS "General Options"
 .TP
@@ -126,8 +144,20 @@ Disable the source with ID 5.
 .B apt-man lint
 Run comprehensive security audit with 17 checks.
 .TP
+.B apt-man migrate 3
+Convert source ID 3 from .list to .sources format.
+.TP
+.B apt-man use-https 7
+Convert source ID 7 from HTTP to HTTPS.
+.TP
 .B apt-man keys \-\-check
 Check all sources for missing or problematic keys.
+.TP
+.B apt-man keys \-\-renewal
+Show keys expiring in the next 90 days.
+.TP
+.B apt-man keys \-\-move /etc/apt/trusted.gpg.d/old.gpg
+Move legacy key to modern location.
 .TP
 .B apt-man keys \-\-info /etc/apt/keyrings/microsoft.gpg
 Show detailed information about the Microsoft key.

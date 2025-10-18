@@ -1275,26 +1275,167 @@ lint_sources() {
     if [[ $issues_found -gt 0 ]]; then
         echo "Result: FAILED - Critical security issues found"
         echo ""
-        echo "Recommended actions:"
-        echo "1. Fix critical issues immediately"
-        echo "2. Run 'apt-man --check-keys' for detailed key status"
-        echo "3. Run 'apt-man --refresh-keys' to update keys"
-        echo "4. Migrate legacy configurations to modern formats"
+        echo "Fix issues with these commands:"
+        echo "  apt-man keys --check       - Check key problems"
+        echo "  apt-man keys --refresh     - Update keys from keyservers"
+        echo "  apt-man keys --move <id>   - Move legacy keys to modern location"
         return 1
     elif [[ $warnings_found -gt 0 ]]; then
         echo "Result: PASSED WITH WARNINGS"
         echo ""
-        echo "Consider addressing warnings to improve security:"
-        echo "1. Migrate legacy .list files to .sources format"
-        echo "2. Move keys from trusted.gpg.d/ to /etc/apt/keyrings/"
-        echo "3. Use HTTPS for all third-party sources"
-        echo "4. Plan for key renewals before expiration"
+        echo "Fix warnings with these commands:"
+        echo "  apt-man migrate <id>       - Convert .list to .sources format"
+        echo "  apt-man keys --move <id>   - Move keys to /etc/apt/keyrings/"
+        echo "  apt-man use-https <id>     - Convert HTTP to HTTPS"
+        echo "  apt-man keys --renewal     - Show keys expiring soon"
         return 0
     else
         echo "Result: EXCELLENT - All security checks passed!"
         echo ""
         echo "Your APT configuration follows current best practices."
         return 0
+    fi
+}
+
+# 18. Migrate .list file to .sources format
+migrate_source() {
+    local id="$1"
+    [[ -n "$id" ]] || { echo "Usage: apt-man migrate <id>"; exit 1; }
+    
+    echo "Migration feature coming soon!"
+    echo "This will convert .list files to modern .sources format"
+    echo ""
+    echo "Manual steps:"
+    echo "1. Identify the .list file from 'apt-man list'"
+    echo "2. Create a new .sources file in /etc/apt/sources.list.d/"
+    echo "3. Use DEB822 format with explicit Signed-By field"
+    echo "4. Test with 'sudo apt update'"
+    echo "5. Remove the old .list file"
+}
+
+# 19. Convert HTTP to HTTPS
+use_https() {
+    local id="$1"
+    [[ -n "$id" ]] || { echo "Usage: apt-man use-https <id>"; exit 1; }
+    
+    rm -f /tmp/sources_index
+    list_sources > /dev/null
+    
+    local file
+    local url
+    file=$(grep "^$id|" /tmp/sources_index | cut -d'|' -f2)
+    url=$(grep "^$id|" /tmp/sources_index | cut -d'|' -f3)
+    
+    if [[ -z "$file" ]] || [[ ! -f "$file" ]]; then
+        echo "Error: Source ID $id not found"
+        return 1
+    fi
+    
+    if [[ ! "$url" =~ ^http:// ]]; then
+        echo "Source $id already uses HTTPS or is not HTTP"
+        return 0
+    fi
+    
+    local https_url="${url/http:/https:}"
+    
+    echo "Converting source $id to HTTPS:"
+    echo "  File: $file"
+    echo "  From: $url"
+    echo "  To:   $https_url"
+    echo ""
+    
+    # Test if HTTPS URL is reachable
+    if ! curl -sf --max-time 5 --head "$https_url" >/dev/null 2>&1; then
+        echo "ERROR: HTTPS URL is not reachable: $https_url"
+        echo "This repository may not support HTTPS"
+        return 1
+    fi
+    
+    # Backup the file
+    sudo cp "$file" "$file.backup"
+    
+    # Replace HTTP with HTTPS in the file
+    sudo sed -i "s|http://|https://|g" "$file"
+    
+    echo "SUCCESS: Converted to HTTPS"
+    echo "Backup saved: $file.backup"
+    echo "Run 'sudo apt update' to test"
+}
+
+# 20. Move legacy keys to modern location
+move_legacy_key() {
+    local keyfile="$1"
+    [[ -n "$keyfile" ]] || { echo "Usage: apt-man keys --move <keyfile>"; exit 1; }
+    
+    if [[ ! -f "$keyfile" ]]; then
+        echo "Error: Key file not found: $keyfile"
+        return 1
+    fi
+    
+    if [[ ! "$keyfile" =~ ^/etc/apt/trusted\.gpg\.d/ ]]; then
+        echo "Error: Key is not in legacy location (trusted.gpg.d)"
+        return 1
+    fi
+    
+    local basename=$(basename "$keyfile")
+    local newfile="/etc/apt/keyrings/$basename"
+    
+    echo "Moving legacy key to modern location:"
+    echo "  From: $keyfile"
+    echo "  To:   $newfile"
+    echo ""
+    
+    # Create keyrings directory if it doesn't exist
+    if [[ ! -d "/etc/apt/keyrings" ]]; then
+        sudo mkdir -p /etc/apt/keyrings
+        sudo chmod 755 /etc/apt/keyrings
+    fi
+    
+    # Copy the key
+    sudo cp "$keyfile" "$newfile"
+    sudo chmod 644 "$newfile"
+    
+    echo "SUCCESS: Key moved to $newfile"
+    echo ""
+    echo "Next steps:"
+    echo "1. Update your .sources files to reference: $newfile"
+    echo "2. Test with 'sudo apt update'"
+    echo "3. Remove old key: sudo rm $keyfile"
+}
+
+# 21. Show keys needing renewal
+keys_renewal() {
+    echo "Keys expiring in the next 90 days:"
+    echo "--------------------------------------"
+    
+    local now=$(date +%s)
+    local ninety_days=$((now + 7776000))
+    local found=0
+    
+    for keyfile in /etc/apt/keyrings/*.gpg /usr/share/keyrings/*.gpg /etc/apt/trusted.gpg.d/*.gpg; do
+        [[ -f "$keyfile" ]] || continue
+        
+        while IFS=: read -r type trust length algo keyid date expires rest; do
+            if [[ "$type" == "pub" ]]; then
+                if [[ -n "$expires" ]] && [[ "$expires" -gt "$now" ]] && [[ "$expires" -lt "$ninety_days" ]]; then
+                    local days_left=$(( (expires - now) / 86400 ))
+                    echo "Key: $keyfile"
+                    echo "  Key ID: $keyid"
+                    echo "  Expires: $(date -d @$expires '+%Y-%m-%d')"
+                    echo "  Days left: $days_left"
+                    echo ""
+                    found=1
+                fi
+            fi
+        done < <(gpg --no-default-keyring --keyring "$keyfile" --list-keys --with-colons 2>/dev/null || true)
+    done
+    
+    if [[ $found -eq 0 ]]; then
+        echo "No keys expiring in the next 90 days"
+    else
+        echo "--------------------------------------"
+        echo "Recommendation: Plan to update these keys before expiration"
+        echo "Use 'apt-man keys --refresh' to update from keyservers"
     fi
 }
 
@@ -1315,11 +1456,16 @@ Commands:
   upgrade-source OLD NEW       upgrade sources to new release
   lint                         comprehensive security audit of sources and keys
   
+  migrate ID                   convert .list file to .sources format
+  use-https ID                 convert HTTP source to HTTPS
+  
   keys [OPTIONS]               manage GPG keys
     --list                     list all GPG keys (default)
     --check                    check for missing or problematic keys
     --refresh                  refresh keys from keyservers
     --info KEYFILE             show detailed info about a key
+    --move KEYFILE             move legacy key to /etc/apt/keyrings/
+    --renewal                  show keys expiring in next 90 days
 
 General Options:
   --help, -h                   display this help and exit
@@ -1336,8 +1482,12 @@ Examples:
   apt-man list                 List all sources
   apt-man list --keys          List sources with their keys
   apt-man disable 5            Disable source ID 5
+  apt-man use-https 7          Convert source ID 7 to HTTPS
+  apt-man migrate 3            Convert .list file to .sources format
   apt-man lint                 Run comprehensive security audit
   apt-man keys --check         Check for key problems
+  apt-man keys --renewal       Show keys expiring soon
+  apt-man keys --move /etc/apt/trusted.gpg.d/old.gpg
   apt-man keys --info /etc/apt/keyrings/microsoft.gpg
   apt-man upgrade-source noble oracular
 
@@ -1389,7 +1539,7 @@ fi
 
 # Main command dispatcher
 case "$COMMAND" in
-    list|--list)
+    list)
         if [[ "${2:-}" == "--keys" ]]; then
             list_sources_with_keys
         else
@@ -1398,49 +1548,59 @@ case "$COMMAND" in
         fi
         ;;
     
-    show|--show)
+    show)
         [[ $# -eq 2 ]] || { echo "Usage: apt-man show <id>"; exit 1; }
         show_packages "$2"
         ;;
     
-    installed|--installed)
+    installed)
         [[ $# -eq 2 ]] || { echo "Usage: apt-man installed <id>"; exit 1; }
         show_installed "$2"
         ;;
     
-    remove|--remove)
+    remove)
         [[ $# -eq 2 ]] || { echo "Usage: apt-man remove <id>"; exit 1; }
         remove_packages "$2"
         ;;
     
-    disable|--disable)
+    disable)
         [[ $# -eq 2 ]] || { echo "Usage: apt-man disable <id>"; exit 1; }
         rm -f /tmp/sources_index
         list_sources > /dev/null
         disable_source "$2"
         ;;
     
-    enable|--enable)
+    enable)
         [[ $# -eq 2 ]] || { echo "Usage: apt-man enable <id>"; exit 1; }
         rm -f /tmp/sources_index
         list_sources > /dev/null
         enable_source "$2"
         ;;
     
-    list-disabled|--list-disabled)
+    list-disabled)
         list_disabled
         ;;
     
-    upgrade-source|--upgrade-source)
+    upgrade-source)
         [[ $# -eq 3 ]] || { echo "Usage: apt-man upgrade-source <old> <new>"; exit 1; }
         upgrade_sources "$2" "$3"
         ;;
     
-    lint|--lint)
+    lint)
         lint_sources
         ;;
     
-    keys|--keys)
+    migrate)
+        [[ $# -eq 2 ]] || { echo "Usage: apt-man migrate <id>"; exit 1; }
+        migrate_source "$2"
+        ;;
+    
+    use-https)
+        [[ $# -eq 2 ]] || { echo "Usage: apt-man use-https <id>"; exit 1; }
+        use_https "$2"
+        ;;
+    
+    keys)
         # Sub-command for keys
         KEYS_CMD="${2:---list}"
         case "$KEYS_CMD" in
@@ -1457,29 +1617,19 @@ case "$COMMAND" in
                 [[ $# -eq 3 ]] || { echo "Usage: apt-man keys --info <keyfile>"; exit 1; }
                 show_key_details "$3"
                 ;;
+            --move|move)
+                [[ $# -eq 3 ]] || { echo "Usage: apt-man keys --move <keyfile>"; exit 1; }
+                move_legacy_key "$3"
+                ;;
+            --renewal|renewal)
+                keys_renewal
+                ;;
             *)
-                # For backwards compatibility, if no sub-command, just list keys
-                if [[ "$KEYS_CMD" == "--"* ]] || [[ -z "$KEYS_CMD" ]]; then
-                    list_keys
-                else
-                    echo "apt-man keys: invalid option -- '$KEYS_CMD'" >&2
-                    echo "Try 'apt-man --help' for more information." >&2
-                    exit 1
-                fi
+                echo "apt-man keys: invalid option -- '$KEYS_CMD'" >&2
+                echo "Try 'apt-man --help' for more information." >&2
+                exit 1
                 ;;
         esac
-        ;;
-    
-    # Backwards compatibility for old commands
-    --check-keys)
-        check_missing_keys
-        ;;
-    --refresh-keys)
-        refresh_keys
-        ;;
-    --key-info)
-        [[ $# -eq 2 ]] || { echo "Usage: apt-man --key-info <keyfile>"; exit 1; }
-        show_key_details "$2"
         ;;
     
     *)

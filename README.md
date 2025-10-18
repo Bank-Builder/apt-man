@@ -16,7 +16,14 @@ A comprehensive command-line tool for managing APT package sources, PPAs, and GP
   - Check for missing or problematic keys
   - Refresh keys from keyservers
   - Show detailed key information (ID, algorithm, expiration)
+  - Move legacy keys to modern locations
+  - Show keys expiring soon (renewal planning)
   - Support for old and new key formats
+
+- **Security Fixes**
+  - Convert HTTP sources to HTTPS automatically
+  - Migrate legacy .list files to .sources format
+  - Comprehensive security auditing with 17 checks
 
 - **Format Support**
   - Legacy `.list` files (one-line format)
@@ -86,6 +93,18 @@ Enable a disabled source:
 apt-man enable 5
 ```
 
+### Security Fixes
+
+Convert HTTP source to HTTPS:
+```bash
+apt-man use-https 7
+```
+
+Migrate .list file to .sources format:
+```bash
+apt-man migrate 3
+```
+
 ### Key Management
 
 List all GPG keys:
@@ -108,6 +127,16 @@ apt-man keys --info /etc/apt/keyrings/microsoft.gpg
 Refresh keys from keyservers:
 ```bash
 apt-man keys --refresh
+```
+
+Move legacy key to modern location:
+```bash
+apt-man keys --move /etc/apt/trusted.gpg.d/old.gpg
+```
+
+Show keys expiring in next 90 days:
+```bash
+apt-man keys --renewal
 ```
 
 ### Package Operations
@@ -258,6 +287,28 @@ apt-man remove 4
 apt-man disable 4
 
 # Remove the source file manually if needed
+```
+
+### Example 4: Fix Security Issues
+
+```bash
+# Run security audit
+apt-man lint
+
+# Fix HTTP sources
+apt-man use-https 7
+
+# Migrate old format files
+apt-man migrate 3
+
+# Move legacy keys
+apt-man keys --move /etc/apt/trusted.gpg.d/old.gpg
+
+# Check for expiring keys
+apt-man keys --renewal
+
+# Verify all fixed
+apt-man lint
 ```
 
 ## License

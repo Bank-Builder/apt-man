@@ -196,6 +196,30 @@ checks including:
 @end itemize
 @end deffn
 
+@section Security Fixes
+
+@deffn Command migrate @var{id}
+Convert a legacy .list file to modern .sources (DEB822) format. Currently provides
+manual migration steps. The modern format is more structured and supports explicit
+key references via the Signed-By field.
+
+@strong{Note:} This feature currently guides you through manual migration steps.
+Automatic migration is planned for a future release.
+@end deffn
+
+@deffn Command use-https @var{id}
+Convert an HTTP source to HTTPS for improved security. The command:
+@itemize @bullet
+@item Tests URL reachability before making changes
+@item Creates a backup of the original file
+@item Updates all HTTP URLs in the file to HTTPS
+@item Provides instructions for testing with @command{apt update}
+@end itemize
+
+@strong{Note:} Some repositories may not support HTTPS. The command will fail
+gracefully if the HTTPS URL is not reachable.
+@end deffn
+
 @section Upgrading Sources
 
 @deffn Command upgrade-source @var{old} @var{new}
@@ -279,6 +303,57 @@ Example:
 @example
 apt-man keys --info /etc/apt/keyrings/microsoft.gpg
 @end example
+@end deffn
+
+@section Moving Legacy Keys
+
+@deffn Command keys @option{--move} @var{keyfile}
+Move a legacy key from @file{/etc/apt/trusted.gpg.d/} to the modern location
+@file{/etc/apt/keyrings/}. This command:
+
+@itemize @bullet
+@item
+Validates the key is in the legacy location
+@item
+Creates @file{/etc/apt/keyrings/} if it doesn't exist
+@item
+Copies the key to the new location
+@item
+Sets appropriate file permissions
+@item
+Provides instructions for updating source files
+@end itemize
+
+@strong{Important:} After moving a key, you must update your .sources files
+to explicitly reference the new key location using the @code{Signed-By} field.
+Test with @command{apt update} before removing the old key file.
+
+Example:
+@example
+apt-man keys --move /etc/apt/trusted.gpg.d/old.gpg
+@end example
+@end deffn
+
+@section Key Renewal Planning
+
+@deffn Command keys @option{--renewal}
+Show all GPG keys that will expire in the next 90 days. This helps plan for
+key renewals before they cause APT update failures. For each expiring key,
+displays:
+
+@itemize @bullet
+@item
+Key file path
+@item
+Key ID
+@item
+Expiration date
+@item
+Days remaining until expiration
+@end itemize
+
+Regular use of this command helps maintain system security and avoid surprise
+APT failures due to expired keys.
 @end deffn
 
 @node Key Formats
