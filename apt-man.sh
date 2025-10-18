@@ -219,31 +219,43 @@ remove_packages() {
         echo "Source is disabled. Skipping package search (disabled sources don't show in apt-cache)."
         echo ""
     else
-        echo "Finding packages installed from this source..."
-        
-        # Get total package count for progress
+        # Get total package count to estimate time
         local total_pkgs=$(dpkg-query -W | wc -l)
-        local checked=0
-        local last_percent=-1
-        
-        for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
-            checked=$((checked + 1))
-            local percent=$((checked * 100 / total_pkgs))
-            
-            # Show progress every 10%
-            if [ $((percent / 10)) -gt $((last_percent / 10)) ]; then
-                echo -ne "Checking packages: ${percent}%\r"
-                last_percent=$percent
-            fi
-            
-            if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
-                packages+=("$pkg")
-            fi
-        done
-        
-        echo -ne "\r\033[K"  # Clear the progress line
-        echo "Package search complete."
+        echo "This system has $total_pkgs packages installed."
+        echo "Checking all packages against this source may take 1-2 minutes."
         echo ""
+        read -p "Search for installed packages from this source? [y/N] " -n 1 -r
+        echo
+        echo ""
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "Finding packages installed from this source..."
+            
+            local checked=0
+            local last_percent=-1
+            
+            for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
+                checked=$((checked + 1))
+                local percent=$((checked * 100 / total_pkgs))
+                
+                # Show progress every 10%
+                if [ $((percent / 10)) -gt $((last_percent / 10)) ]; then
+                    echo -ne "Checking packages: ${percent}%\r"
+                    last_percent=$percent
+                fi
+                
+                if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
+                    packages+=("$pkg")
+                fi
+            done
+            
+            echo -ne "\r\033[K"  # Clear the progress line
+            echo "Package search complete."
+            echo ""
+        else
+            echo "Skipping package search."
+            echo ""
+        fi
     fi
     
     # Step 1: Handle installed packages
