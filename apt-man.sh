@@ -220,11 +220,30 @@ remove_packages() {
         echo ""
     else
         echo "Finding packages installed from this source..."
+        
+        # Get total package count for progress
+        local total_pkgs=$(dpkg-query -W | wc -l)
+        local checked=0
+        local last_percent=-1
+        
         for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
+            checked=$((checked + 1))
+            local percent=$((checked * 100 / total_pkgs))
+            
+            # Show progress every 10%
+            if [ $((percent / 10)) -gt $((last_percent / 10)) ]; then
+                echo -ne "Checking packages: ${percent}%\r"
+                last_percent=$percent
+            fi
+            
             if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
                 packages+=("$pkg")
             fi
         done
+        
+        echo -ne "\r\033[K"  # Clear the progress line
+        echo "Package search complete."
+        echo ""
     fi
     
     # Step 1: Handle installed packages
