@@ -1151,6 +1151,51 @@ lint_sources() {
         checks_passed=$((checks_passed + 1))
     fi
     
+    # Check 16: Unnecessary deb-src entries
+    echo "[CHECK 16] Unnecessary source package repositories (deb-src)"
+    local debsrc_count=0
+    
+    for file in "$SOURCES_DIR"/*.list; do
+        [[ -f "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        while read -r line; do
+            if [[ "$line" =~ ^deb-src ]]; then
+                echo "  [WARN] Source package repository: $file"
+                echo "         Line: $line"
+                debsrc_count=$((debsrc_count + 1))
+            fi
+        done < "$file"
+    done
+    
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^Types:[[:space:]]*(.+)$ ]]; then
+                local types="${BASH_REMATCH[1]}"
+                if [[ "$types" =~ deb-src ]]; then
+                    echo "  [WARN] Source package repository: $file"
+                    echo "         Types: $types"
+                    debsrc_count=$((debsrc_count + 1))
+                fi
+            fi
+        done < "$file"
+    done
+    
+    if [[ $debsrc_count -gt 0 ]]; then
+        echo "         Found $debsrc_count deb-src repository(ies)"
+        echo "         Recommendation: Remove unless you compile packages from source"
+        echo "         deb-src entries waste bandwidth and slow 'apt update'"
+        echo ""
+        warnings_found=$((warnings_found + 1))
+    else
+        echo "  [PASS] No unnecessary deb-src repositories found"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
     # Summary
     echo "============================================"
     echo "LINT SUMMARY"
