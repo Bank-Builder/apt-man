@@ -1,0 +1,207 @@
+.TH APT-MAN 1 "October 2025" "apt-man 1.0" "User Commands"
+.SH NAME
+apt-man \- manage APT sources, PPAs, and GPG keys with ease
+.SH SYNOPSIS
+.B apt-man
+[\fIOPTION\fR] [\fIARGS\fR]
+.SH DESCRIPTION
+.B apt-man
+is a comprehensive tool for managing APT package sources, including Ubuntu PPAs,
+third-party repositories, and their GPG signing keys. It supports both legacy
+.list format and modern DEB822 .sources format.
+
+The tool provides functionality to list, enable, disable, and upgrade sources,
+as well as manage their associated GPG keys. It helps identify security issues
+like missing keys or outdated key formats.
+
+.SH OPTIONS
+.SS "Source Management"
+.TP
+.B \-\-list [\-\-keys]
+List all APT sources. If \fB\-\-keys\fR is specified, also show the GPG signing
+key associated with each source.
+.TP
+.B \-\-show \fIID\fR
+Show all available packages in the source identified by \fIID\fR.
+.TP
+.B \-\-installed \fIID\fR
+Show all installed packages from the source identified by \fIID\fR.
+.TP
+.B \-\-remove \fIID\fR
+Remove all packages installed from the source identified by \fIID\fR.
+.TP
+.B \-\-disable \fIID\fR
+Disable a source by renaming it with a .disabled extension. The source will
+no longer be used by APT but can be re-enabled later.
+.TP
+.B \-\-enable \fIID\fR
+Enable a previously disabled source by removing the .disabled extension.
+.TP
+.B \-\-list\-disabled
+List all disabled sources.
+.TP
+.B \-\-upgrade\-source \fIOLD\fR \fINEW\fR
+Upgrade all APT sources from OLD release codename to NEW release codename.
+For example, to upgrade from "noble" to "oracular".
+
+.SS "Key Management"
+.TP
+.B \-\-keys
+List all GPG keys on the system, showing their format (old vs new) and location.
+.TP
+.B \-\-check\-keys
+Check all sources for missing or problematic GPG keys. Reports missing key files,
+unreadable keys, and sources without keys (security risk).
+.TP
+.B \-\-refresh\-keys
+Refresh GPG keys from keyservers to get updates, revocations, or new signatures.
+Only affects keys in /etc/apt/keyrings/. System keyrings are updated via APT packages.
+.TP
+.B \-\-key\-info \fIKEYFILE\fR
+Show detailed information about a specific GPG key file, including key ID,
+algorithm, creation date, expiration date, and status.
+.TP
+.B \-\-help
+Display help message and exit.
+.TP
+.B \-\-version
+Display version information and exit.
+
+.SH KEY FORMATS
+.B apt-man
+recognizes and categorizes GPG keys by their format and location:
+
+.TP
+.B "OLD (deprecated)"
+The legacy /etc/apt/trusted.gpg file. This format is deprecated and should
+not be used for new keys.
+.TP
+.B "OLD (trusted.gpg.d)"
+Legacy keys in /etc/apt/trusted.gpg.d/. These are automatically trusted by
+APT but should be migrated to the new format.
+.TP
+.B "NEW (apt keyring)"
+Modern format keys in /etc/apt/keyrings/. This is the recommended location
+for user-managed keys. Sources must explicitly reference these keys.
+.TP
+.B "NEW (system keyring)"
+System-managed keys in /usr/share/keyrings/. These are installed and updated
+via APT packages.
+.TP
+.B "INLINE (embedded key)"
+PGP keys embedded directly in DEB822 .sources files. Cannot be refreshed
+from keyservers.
+
+.SH SOURCE FORMATS
+.B apt-man
+supports both APT source formats:
+
+.TP
+.B ".list files"
+Legacy one-line-per-source format. Keys are implicitly trusted from the
+default keyring.
+.TP
+.B ".sources files"
+Modern DEB822 format with structured fields. Supports explicit key references
+via Signed-By field and inline PGP keys.
+
+.SH EXAMPLES
+.TP
+.B apt-man \-\-list
+List all active and disabled sources.
+.TP
+.B apt-man \-\-list \-\-keys
+List all sources with their GPG signing keys.
+.TP
+.B apt-man \-\-disable 5
+Disable the source with ID 5.
+.TP
+.B apt-man \-\-check\-keys
+Check all sources for missing or problematic keys.
+.TP
+.B apt-man \-\-key\-info /etc/apt/keyrings/microsoft.gpg
+Show detailed information about the Microsoft key.
+.TP
+.B apt-man \-\-upgrade\-source noble oracular
+Upgrade all sources from Ubuntu Noble to Oracular.
+.TP
+.B apt-man \-\-installed 3
+Show all installed packages from source ID 3.
+.TP
+.B apt-man \-\-remove 4
+Remove all packages installed from source ID 4.
+
+.SH FILES
+.TP
+.I /etc/apt/sources.list
+Main APT sources file (may not exist on modern systems).
+.TP
+.I /etc/apt/sources.list.d/*.list
+Legacy format source files.
+.TP
+.I /etc/apt/sources.list.d/*.sources
+Modern DEB822 format source files.
+.TP
+.I /etc/apt/sources.list.d/*.disabled
+Disabled source files (both formats).
+.TP
+.I /etc/apt/trusted.gpg
+Deprecated keyring file.
+.TP
+.I /etc/apt/trusted.gpg.d/*.gpg
+Legacy keyring directory.
+.TP
+.I /etc/apt/keyrings/*.gpg
+Modern user-managed keyring directory (recommended).
+.TP
+.I /usr/share/keyrings/*.gpg
+System-managed keyring directory (package-managed).
+.TP
+.I /tmp/sources_index
+Temporary index file used during source operations.
+
+.SH SECURITY CONSIDERATIONS
+.IP \(bu 2
+Always verify keys before adding them to your system
+.IP \(bu 2
+Prefer keys in /etc/apt/keyrings/ over /etc/apt/trusted.gpg.d/
+.IP \(bu 2
+Use explicit Signed-By references in .sources files
+.IP \(bu 2
+Regularly check for missing or expired keys
+.IP \(bu 2
+Be cautious with sources that don't specify keys
+.IP \(bu 2
+Keep keys updated, especially for third-party repositories
+
+.SH DIAGNOSTICS
+.B apt-man
+uses standard exit codes:
+.TP
+.B 0
+Success
+.TP
+.B 1
+General error (invalid usage, missing arguments)
+.TP
+.B 2
+File not found or permission denied
+
+.SH BUGS
+Report bugs to: https://github.com/yourusername/apt-man/issues
+
+.SH AUTHOR
+Written by Andrew.
+
+.SH SEE ALSO
+.BR apt (8),
+.BR apt-get (8),
+.BR apt-key (8),
+.BR sources.list (5),
+.BR gpg (1)
+
+.SH COPYRIGHT
+Copyright \(co 2025 Free Software.
+This is free software; see the source for copying conditions.
+There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+

@@ -1,0 +1,492 @@
+\input texinfo   @c -*-texinfo-*-
+@c %**start of header
+@setfilename apt-man.info
+@settitle APT Manager Manual
+@documentencoding UTF-8
+@c %**end of header
+
+@copying
+This manual is for apt-man (version 1.0, October 2025),
+a tool for managing APT sources, PPAs, and GPG keys.
+
+Copyright @copyright{} 2025 Free Software
+
+@quotation
+Permission is granted to copy, distribute and/or modify this document
+under the terms of the GNU Free Documentation License, Version 1.3
+or any later version published by the Free Software Foundation.
+@end quotation
+@end copying
+
+@titlepage
+@title APT Manager
+@subtitle Managing APT Sources and GPG Keys
+@author Andrew
+
+@page
+@vskip 0pt plus 1filll
+@insertcopying
+@end titlepage
+
+@contents
+
+@ifnottex
+@node Top
+@top APT Manager
+
+This manual documents apt-man version 1.0, a comprehensive tool for
+managing APT package sources and their GPG signing keys.
+
+@insertcopying
+@end ifnottex
+
+@menu
+* Introduction::        What is apt-man?
+* Getting Started::     Quick start guide
+* Source Management::   Managing APT sources
+* Key Management::      Managing GPG keys
+* Key Formats::         Understanding key formats
+* Source Formats::      Understanding source formats
+* Examples::            Common usage examples
+* Security::            Security considerations
+* Files::               Important files and directories
+* Index::               Complete index
+@end menu
+
+@node Introduction
+@chapter Introduction
+
+@command{apt-man} is a comprehensive command-line tool for managing APT
+package sources, including Ubuntu PPAs and third-party repositories, along
+with their GPG signing keys. It provides an intuitive interface for common
+tasks that would otherwise require manual file editing and complex APT
+commands.
+
+@section Features
+
+@itemize @bullet
+@item
+List and categorize all APT sources
+@item
+Enable and disable sources without deleting them
+@item
+Show packages available in or installed from specific sources
+@item
+Bulk upgrade sources between Ubuntu releases
+@item
+Comprehensive GPG key management and validation
+@item
+Support for both legacy .list and modern .sources formats
+@item
+Identify security issues like missing or expired keys
+@end itemize
+
+@node Getting Started
+@chapter Getting Started
+
+@section Installation
+
+Copy @file{apt-man.sh} to a directory in your PATH:
+
+@example
+sudo cp apt-man.sh /usr/local/bin/apt-man
+sudo chmod +x /usr/local/bin/apt-man
+@end example
+
+@section Basic Usage
+
+List all sources:
+@example
+apt-man --list
+@end example
+
+List sources with their signing keys:
+@example
+apt-man --list --keys
+@end example
+
+Check for key problems:
+@example
+apt-man --check-keys
+@end example
+
+@node Source Management
+@chapter Source Management
+
+@section Listing Sources
+
+@deffn Command --list [@option{--keys}]
+List all APT sources, including both active and disabled ones. Sources are
+numbered for easy reference in other commands. If @option{--keys} is specified,
+also shows the GPG signing key for each source.
+
+Active sources are shown normally, while disabled sources are marked with
+@code{[disabled]} in the output.
+@end deffn
+
+@section Enabling and Disabling Sources
+
+@deffn Command --disable @var{id}
+Disable a source by renaming it with a @file{.disabled} extension. The source
+remains on the system but is not used by APT. This is safer than deleting
+sources as they can be easily re-enabled.
+
+Cannot be used on the main @file{/etc/apt/sources.list} file.
+@end deffn
+
+@deffn Command --enable @var{id}
+Enable a previously disabled source by removing the @file{.disabled} extension.
+The source becomes active immediately but requires @command{apt update} to
+refresh package lists.
+@end deffn
+
+@deffn Command --list-disabled
+Show only disabled sources. This is useful for reviewing what sources are
+available but not currently active.
+@end deffn
+
+@section Package Operations
+
+@deffn Command --show @var{id}
+Show all packages available in the source identified by @var{id}. This queries
+the repository's package index directly.
+@end deffn
+
+@deffn Command --installed @var{id}
+Show all packages currently installed on your system that came from the source
+identified by @var{id}.
+@end deffn
+
+@deffn Command --remove @var{id}
+Remove all packages installed from the source identified by @var{id}. This is
+useful before removing a third-party repository to avoid leaving orphaned
+packages.
+
+@strong{Warning:} This operation removes packages without confirmation. Use with
+caution.
+@end deffn
+
+@section Upgrading Sources
+
+@deffn Command --upgrade-source @var{old} @var{new}
+Upgrade all APT sources from @var{old} release codename to @var{new} release
+codename. This modifies all source files to reference the new release.
+
+For example, to upgrade from Ubuntu Noble to Oracular:
+@example
+apt-man --upgrade-source noble oracular
+@end example
+
+After upgrading sources, run:
+@example
+sudo apt update
+sudo apt dist-upgrade
+@end example
+@end deffn
+
+@node Key Management
+@chapter Key Management
+
+@section Listing Keys
+
+@deffn Command --keys
+List all GPG keys on the system used for package verification. Keys are
+categorized by their format and location, helping identify outdated key
+storage methods.
+@end deffn
+
+@section Checking Keys
+
+@deffn Command --check-keys
+Validate all sources for missing or problematic GPG keys. This command checks:
+
+@itemize @bullet
+@item
+Whether referenced key files exist
+@item
+Whether key files are readable
+@item
+Sources without explicit keys (potential security risk)
+@item
+Key format (old vs new)
+@end itemize
+
+Reports any issues found with actionable information.
+@end deffn
+
+@section Refreshing Keys
+
+@deffn Command --refresh-keys
+Refresh GPG keys from keyservers to get updates, revocations, or new
+signatures. This only affects keys in @file{/etc/apt/keyrings/}.
+
+Keys in @file{/usr/share/keyrings/} are managed by APT packages and should
+be updated via @command{apt upgrade}.
+@end deffn
+
+@section Key Information
+
+@deffn Command --key-info @var{keyfile}
+Show detailed information about a specific GPG key file, including:
+
+@itemize @bullet
+@item
+Key ID
+@item
+Algorithm and key strength
+@item
+Creation date
+@item
+Expiration date (if any)
+@item
+Whether the key is expired
+@item
+Key UIDs (identities)
+@end itemize
+
+Example:
+@example
+apt-man --key-info /etc/apt/keyrings/microsoft.gpg
+@end example
+@end deffn
+
+@node Key Formats
+@chapter Understanding Key Formats
+
+@section Legacy Formats (Deprecated)
+
+@subsection OLD (deprecated)
+The single-file @file{/etc/apt/trusted.gpg} keyring. This format is deprecated
+and should not be used for new keys. All keys in this file are automatically
+trusted by APT.
+
+@subsection OLD (trusted.gpg.d)
+Keys stored in @file{/etc/apt/trusted.gpg.d/*.gpg}. While better than the
+single-file approach, this is still an older format. Keys here are
+automatically trusted by APT without explicit source references.
+
+@section Modern Formats (Recommended)
+
+@subsection NEW (apt keyring)
+Keys in @file{/etc/apt/keyrings/*.gpg}. This is the recommended location for
+user-managed keys. Sources must explicitly reference these keys using the
+@code{Signed-By} field in DEB822 format or equivalent options.
+
+This approach provides better security through explicit trust relationships.
+
+@subsection NEW (system keyring)
+Keys in @file{/usr/share/keyrings/*.gpg}. These are installed and updated
+via APT packages (e.g., @code{ubuntu-keyring}). Generally used for
+distribution-provided keys.
+
+@section Special Formats
+
+@subsection INLINE (embedded key)
+PGP keys embedded directly in DEB822 @file{.sources} files using the
+@code{Signed-By} field. These cannot be refreshed from keyservers but are
+self-contained within the source definition.
+
+@node Source Formats
+@chapter Understanding Source Formats
+
+@section Legacy Format (.list files)
+
+The traditional one-line-per-source format:
+@example
+deb http://archive.ubuntu.com/ubuntu noble main restricted
+deb-src http://archive.ubuntu.com/ubuntu noble main restricted
+@end example
+
+Limitations:
+@itemize @bullet
+@item
+No explicit key references
+@item
+Uses default keyring only
+@item
+Less structured
+@end itemize
+
+@section Modern Format (.sources files)
+
+The structured DEB822 format introduced in Ubuntu 22.04+:
+@example
+Types: deb
+URIs: http://archive.ubuntu.com/ubuntu
+Suites: noble
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+@end example
+
+Advantages:
+@itemize @bullet
+@item
+Explicit key references via @code{Signed-By}
+@item
+Support for inline PGP keys
+@item
+More structured and extensible
+@item
+Better security through explicit trust
+@end itemize
+
+@node Examples
+@chapter Common Usage Examples
+
+@section Example 1: Listing All Sources
+
+@example
+$ apt-man --list
+Detected APT sources:
+--------------------------------------
+[01] 3rd Party / PPA      https://packages.microsoft.com/...
+[02] 3rd Party / PPA      https://packages.mozilla.org/apt
+[03] Ubuntu Official      http://archive.ubuntu.com/ubuntu
+[04] Ubuntu Official      http://security.ubuntu.com/ubuntu
+--------------------------------------
+@end example
+
+@section Example 2: Viewing Source Keys
+
+@example
+$ apt-man --list --keys
+APT sources with their signing keys:
+--------------------------------------
+[01] 3rd Party / PPA      https://packages.microsoft.com/...
+     Key: NEW (apt keyring)  /etc/apt/keyrings/microsoft.gpg
+[02] Ubuntu Official      http://archive.ubuntu.com/ubuntu
+     Key: NEW (system keyring)  /usr/share/keyrings/ubuntu-...
+--------------------------------------
+@end example
+
+@section Example 3: Temporarily Disabling a PPA
+
+@example
+$ apt-man --list
+[02] 3rd Party / PPA      https://ppa.launchpad.net/...
+
+$ apt-man --disable 2
+Disabling source: /etc/apt/sources.list.d/ppa.sources
+Source disabled. Run 'sudo apt update' to apply changes.
+
+$ apt-man --list
+[02] 3rd Party / PPA      [disabled] https://ppa.launchpad.net/...
+@end example
+
+@section Example 4: Checking for Key Problems
+
+@example
+$ apt-man --check-keys
+Checking for missing or problematic keys...
+--------------------------------------
+[OK] NEW (apt keyring): https://packages.microsoft.com/...
+     Key: /etc/apt/keyrings/microsoft.gpg
+
+[ERROR] Missing key file: /etc/apt/keyrings/missing.gpg
+        Required by: https://example.com/repo
+        File: /etc/apt/sources.list.d/example.sources
+--------------------------------------
+Found issues with one or more keys.
+@end example
+
+@section Example 5: Upgrading Ubuntu Release
+
+@example
+$ apt-man --upgrade-source noble oracular
+Upgrading all APT sources from noble to oracular ...
+Upgrade complete. You may now run: sudo apt update
+
+$ sudo apt update
+$ sudo apt dist-upgrade
+@end example
+
+@node Security
+@chapter Security Considerations
+
+@section Key Verification
+
+Always verify GPG keys before adding them to your system:
+
+@enumerate
+@item
+Download the key from the official source
+@item
+Verify the key fingerprint matches published values
+@item
+Check the key's UIDs and signatures
+@item
+Store in @file{/etc/apt/keyrings/} with appropriate permissions
+@end enumerate
+
+@section Best Practices
+
+@itemize @bullet
+@item
+Use explicit @code{Signed-By} references in @file{.sources} files
+@item
+Prefer keys in @file{/etc/apt/keyrings/} over @file{/etc/apt/trusted.gpg.d/}
+@item
+Regularly run @command{apt-man --check-keys} to identify issues
+@item
+Keep keys updated, especially for third-party repositories
+@item
+Remove unused sources and their keys
+@item
+Be cautious with sources that don't specify keys
+@item
+Review key expiration dates periodically
+@end itemize
+
+@section Common Security Issues
+
+@subsection Missing Keys
+Sources without keys or with missing key files can be compromised. Always
+ensure keys are present and valid.
+
+@subsection Expired Keys
+Expired keys may indicate abandoned repositories or security issues. Check
+with @command{apt-man --key-info}.
+
+@subsection Legacy Key Formats
+Keys in @file{/etc/apt/trusted.gpg} or @file{/etc/apt/trusted.gpg.d/} are
+automatically trusted. Migrate to explicit references when possible.
+
+@node Files
+@chapter Important Files and Directories
+
+@table @file
+@item /etc/apt/sources.list
+Main APT sources file (may not exist on modern systems).
+
+@item /etc/apt/sources.list.d/*.list
+Legacy format source files.
+
+@item /etc/apt/sources.list.d/*.sources
+Modern DEB822 format source files.
+
+@item /etc/apt/sources.list.d/*.disabled
+Disabled source files (both formats).
+
+@item /etc/apt/trusted.gpg
+Deprecated keyring file. Avoid using.
+
+@item /etc/apt/trusted.gpg.d/*.gpg
+Legacy keyring directory. Still functional but old format.
+
+@item /etc/apt/keyrings/*.gpg
+Modern user-managed keyring directory (recommended).
+
+@item /usr/share/keyrings/*.gpg
+System-managed keyring directory (package-managed).
+
+@item /tmp/sources_index
+Temporary index file created during source operations.
+@end table
+
+@node Index
+@unnumbered Index
+
+@printindex cp
+
+@bye
+

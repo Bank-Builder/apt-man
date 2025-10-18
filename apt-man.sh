@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# APT Manager – manage PPAs and repositories with ease
+# APT Manager - manage PPAs and repositories with ease
 
 set -euo pipefail
 
+VERSION="1.0"
 SOURCES_DIR="/etc/apt/sources.list.d"
 MAIN_LIST="/etc/apt/sources.list"
 
@@ -539,8 +540,79 @@ show_key_details() {
     echo "--------------------------------------"
 }
 
+# Show help message
+show_help() {
+    cat << 'EOF'
+Usage: apt-man [OPTION] [ARGS]
+Manage APT sources, PPAs, and GPG keys with ease.
+
+Source Management:
+  --list [--keys]              list all sources (optionally with keys)
+  --show ID                    show packages in a source
+  --installed ID               show installed packages from a source
+  --remove ID                  remove all packages from a source
+  --disable ID                 disable a source
+  --enable ID                  enable a disabled source
+  --list-disabled              list disabled sources
+  --upgrade-source OLD NEW     upgrade sources to new release
+
+Key Management:
+  --keys                       list all GPG keys
+  --check-keys                 check for missing or problematic keys
+  --refresh-keys               refresh keys from keyservers
+  --key-info KEYFILE           show detailed info about a key
+
+General:
+  --help                       display this help and exit
+  --version                    output version information and exit
+
+Key Format Classifications:
+  OLD (deprecated)             /etc/apt/trusted.gpg (single file)
+  OLD (trusted.gpg.d)          /etc/apt/trusted.gpg.d/*.gpg
+  NEW (apt keyring)            /etc/apt/keyrings/*.gpg (recommended)
+  NEW (system keyring)         /usr/share/keyrings/*.gpg
+  INLINE (embedded key)        embedded in .sources files
+
+Examples:
+  apt-man --list                List all sources
+  apt-man --list --keys         List sources with their keys
+  apt-man --disable 5           Disable source ID 5
+  apt-man --check-keys          Check for key problems
+  apt-man --key-info /etc/apt/keyrings/microsoft.gpg
+
+Exit status:
+  0  if OK,
+  1  if problems with arguments or execution,
+  2  if file not found or permission denied.
+
+Report bugs to: <https://github.com/yourusername/apt-man/issues>
+apt-man home page: <https://github.com/yourusername/apt-man>
+EOF
+}
+
+# Show version
+show_version() {
+    cat << EOF
+apt-man $VERSION
+Copyright (C) 2025 Free Software
+License: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+Written by Andrew.
+EOF
+}
+
 # CLI entry
 case "${1:-}" in
+    --help|-h)
+        show_help
+        exit 0
+        ;;
+    --version|-V)
+        show_version
+        exit 0
+        ;;
     --list)
         if [[ "${2:-}" == "--keys" ]]; then
             list_sources_with_keys
@@ -593,24 +665,14 @@ case "${1:-}" in
         [[ $# -eq 2 ]] || { echo "Usage: $0 --key-info <keyfile>"; exit 1; }
         show_key_details "$2"
         ;;
+    "")
+        echo "apt-man: missing operand" >&2
+        echo "Try 'apt-man --help' for more information." >&2
+        exit 1
+        ;;
     *)
-        echo "Usage: $0 [OPTIONS]"
-        echo ""
-        echo "Source Management:"
-        echo "  --list [--keys]              List all sources (optionally with keys)"
-        echo "  --show <id>                  Show packages in a source"
-        echo "  --installed <id>             Show installed packages from a source"
-        echo "  --remove <id>                Remove all packages from a source"
-        echo "  --disable <id>               Disable a source"
-        echo "  --enable <id>                Enable a disabled source"
-        echo "  --list-disabled              List disabled sources"
-        echo "  --upgrade-source <old> <new> Upgrade sources to new release"
-        echo ""
-        echo "Key Management:"
-        echo "  --keys                       List all GPG keys"
-        echo "  --check-keys                 Check for missing or problematic keys"
-        echo "  --refresh-keys               Refresh keys from keyservers"
-        echo "  --key-info <keyfile>         Show detailed info about a key"
+        echo "apt-man: invalid option -- '$1'" >&2
+        echo "Try 'apt-man --help' for more information." >&2
         exit 1
         ;;
 esac
