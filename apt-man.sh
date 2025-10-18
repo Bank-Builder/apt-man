@@ -1790,7 +1790,196 @@ lint_sources() {
         echo ""
         issues_found=$((issues_found + 1))
     else
-        echo "  [PASS] No architecture mismatches detected"
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 18: Source reachability
+    echo "[CHECK 18] Source reachability and response times"
+    local unreachable_count=0
+    local slow_sources=0
+    
+    rm -f /tmp/sources_index
+    list_sources > /dev/null
+    
+    while IFS='|' read -r id file url; do
+        [[ -n "$url" ]] || continue
+        
+        # Test source reachability
+        local start_time=$(date +%s%3N)
+        local response=$(curl -s --connect-timeout 10 --max-time 15 "$url/dists/" 2>/dev/null)
+        local end_time=$(date +%s%3N)
+        local response_time=$((end_time - start_time))
+        
+        if [[ -z "$response" ]] || [[ "$response" =~ "404 Not Found" ]] || [[ "$response" =~ "Connection refused" ]]; then
+            echo "  [FAIL] Unreachable source: $url"
+            echo "         File: $file (ID: $id)"
+            echo "         Recommendation: Check URL or disable source"
+            unreachable_count=$((unreachable_count + 1))
+        elif [[ $response_time -gt 5000 ]]; then
+            echo "  [WARN] Slow source: $url"
+            echo "         Response time: ${response_time}ms"
+            echo "         File: $file (ID: $id)"
+            echo "         Recommendation: Consider using a faster mirror"
+            slow_sources=$((slow_sources + 1))
+        fi
+    done < /tmp/sources_index
+    
+    if [[ $unreachable_count -gt 0 ]] || [[ $slow_sources -gt 0 ]]; then
+        echo "         Found $unreachable_count unreachable source(s), $slow_sources slow source(s)"
+        echo ""
+        issues_found=$((issues_found + unreachable_count))
+        warnings_found=$((warnings_found + slow_sources))
+    else
+        echo "  [PASS] All sources are reachable and responsive"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 19: Package conflicts between sources
+    echo "[CHECK 19] Package conflicts between sources"
+    local conflict_count=0
+    
+    # Get all unique package names from all sources
+    declare -A package_sources
+    while IFS='|' read -r id file url; do
+        [[ -n "$url" ]] || continue
+        
+        # Extract codename from URL
+        local repo_codename="$CODENAME"
+        if [[ "$url" =~ /ubuntu/([0-9]+\.[0-9]+)/ ]]; then
+            local ubuntu_version="${BASH_REMATCH[1]}"
+            case "$ubuntu_version" in
+                20.04) repo_codename="focal" ;;
+                22.04) repo_codename="jammy" ;;
+                24.04) repo_codename="noble" ;;
+                25.04) repo_codename="plucky" ;;
+                *) repo_codename="$CODENAME" ;;
+            esac
+        fi
+        
+        # Try to get packages from this source
+        local packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages"
+        local packages=$(curl -s "$packages_url" 2>/dev/null)
+        
+        # Try compressed if standard fails
+        if [[ ! "$packages" =~ ^Package: ]]; then
+            packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages.gz"
+            packages=$(curl -s "$packages_url" 2>/dev/null | gunzip 2>/dev/null)
+        fi
+        
+        # Try flat structure if compressed fails
+        if [[ ! "$packages" =~ ^Package: ]]; then
+            packages_url="${url}/Packages"
+            packages=$(curl -s "$packages_url" 2>/dev/null)
+        fi
+        
+        if [[ "$packages" =~ ^Package: ]]; then
+            echo "$packages" | grep -E '^Package: ' | awk '{print $2}' | while read -r pkg; do
+                [[ -n "$pkg" ]] || continue
+                package_sources["$pkg"]+="$id "
+            done
+        fi
+    done < /tmp/sources_index
+    
+    # Check for conflicts
+    for pkg in "${!package_sources[@]}"; do
+        local sources=(${package_sources["$pkg"]})
+        if [[ ${#sources[@]} -gt 1 ]]; then
+            echo "  [WARN] Package conflict: $pkg"
+            echo "         Available from sources: ${sources[*]}"
+            echo "         Recommendation: Consider pinning or disabling sources"
+            conflict_count=$((conflict_count + 1))
+        fi
+    done
+    
+    if [[ $conflict_count -gt 0 ]]; then
+        echo "         Found $conflict_count package conflict(s)"
+        echo ""
+        warnings_found=$((warnings_found + 1))
+    else
+        echo "  [PASS] No package conflicts detected"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 20: Disk space availability
+    echo "[CHECK 20] Disk space availability"
+    local available_space=$(df /var/cache/apt/archives 2>/dev/null | tail -1 | awk '{print $4}')
+    local available_gb=$((available_space / 1024 / 1024))
+    
+    if [[ $available_gb -lt 1 ]]; then
+        echo "  [FAIL] Low disk space: ${available_gb}GB available"
+        echo "         Location: /var/cache/apt/archives"
+        echo "         Recommendation: Free up disk space or clean APT cache"
+        echo ""
+        issues_found=$((issues_found + 1))
+    elif [[ $available_gb -lt 5 ]]; then
+        echo "  [WARN] Limited disk space: ${available_gb}GB available"
+        echo "         Location: /var/cache/apt/archives"
+        echo "         Recommendation: Consider cleaning APT cache"
+        echo ""
+        warnings_found=$((warnings_found + 1))
+    else
+        echo "  [PASS] Sufficient disk space: ${available_gb}GB available"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 21: Orphaned configuration files
+    echo "[CHECK 21] Orphaned configuration files"
+    local orphan_count=0
+    
+    # Find .dpkg-old and .dpkg-dist files
+    for file in /etc/*.dpkg-old /etc/*.dpkg-dist; do
+        [[ -f "$file" ]] || continue
+        echo "  [WARN] Orphaned config: $file"
+        echo "         Recommendation: Review and remove if no longer needed"
+        orphan_count=$((orphan_count + 1))
+    done
+    
+    # Find orphaned files in /etc/apt/sources.list.d/
+    for file in "$SOURCES_DIR"/*.list.old "$SOURCES_DIR"/*.sources.old; do
+        [[ -f "$file" ]] || continue
+        echo "  [WARN] Orphaned source backup: $file"
+        echo "         Recommendation: Remove if no longer needed"
+        orphan_count=$((orphan_count + 1))
+    done
+    
+    if [[ $orphan_count -gt 0 ]]; then
+        echo "         Found $orphan_count orphaned file(s)"
+        echo ""
+        warnings_found=$((warnings_found + 1))
+    else
+        echo "  [PASS] No orphaned configuration files found"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
+    # Check 22: Package database integrity
+    echo "[CHECK 22] Package database integrity"
+    local db_issues=0
+    
+    # Check if dpkg database is locked
+    if [[ -f /var/lib/dpkg/lock-frontend ]] || [[ -f /var/lib/dpkg/lock ]]; then
+        echo "  [WARN] Package database is locked"
+        echo "         Recommendation: Wait for other package operations to complete"
+        db_issues=$((db_issues + 1))
+    fi
+    
+    # Check for broken packages
+    local broken_packages=$(dpkg --audit 2>/dev/null | wc -l)
+    if [[ $broken_packages -gt 0 ]]; then
+        echo "  [FAIL] Broken packages detected: $broken_packages"
+        echo "         Recommendation: Run 'apt-man fix-deps' to repair"
+        db_issues=$((db_issues + 1))
+    fi
+    
+    if [[ $db_issues -gt 0 ]]; then
+        echo "         Found $db_issues database issue(s)"
+        echo ""
+        issues_found=$((issues_found + db_issues))
+    else
+        echo "  [PASS] Package database is healthy"
         echo ""
         checks_passed=$((checks_passed + 1))
     fi
