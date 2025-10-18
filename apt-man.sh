@@ -599,16 +599,35 @@ list_disabled() {
     echo "--------------------------------------"
 }
 
+# Helper function to get key expiry date
+get_key_expiry() {
+    local keyfile="$1"
+    local expires=$(gpg --no-default-keyring --keyring "$keyfile" --list-keys --with-colons 2>/dev/null | grep "^pub:" | head -1 | cut -d: -f7)
+    
+    if [[ -n "$expires" ]] && [[ "$expires" != "" ]]; then
+        if [[ "$expires" -lt $(date +%s) ]]; then
+            echo "EXPIRED $(date -d @$expires '+%Y-%m-%d' 2>/dev/null || echo $expires)"
+        else
+            echo "$(date -d @$expires '+%Y-%m-%d' 2>/dev/null || echo $expires)"
+        fi
+    else
+        echo "Never"
+    fi
+}
+
 # 9. List all GPG keys
 list_keys() {
     echo "APT GPG Keys:"
+    echo "--------------------------------------"
+    printf "[%02s] %-25s %-12s %s\n" "ID" "Format" "Expires" "Key File"
     echo "--------------------------------------"
     local i=1
     
     # Check old deprecated keyring
     if [[ -f "/etc/apt/trusted.gpg" ]]; then
         local format=$(classify_key "/etc/apt/trusted.gpg")
-        printf "[%02d] %-25s %s\n" "$i" "$format" "/etc/apt/trusted.gpg"
+        local expiry=$(get_key_expiry "/etc/apt/trusted.gpg")
+        printf "[%02d] %-25s %-12s %s\n" "$i" "$format" "$expiry" "/etc/apt/trusted.gpg"
         ((i++))
     fi
     
@@ -616,7 +635,8 @@ list_keys() {
     for keyfile in /etc/apt/trusted.gpg.d/*.gpg; do
         [[ -f "$keyfile" ]] || continue
         local format=$(classify_key "$keyfile")
-        printf "[%02d] %-25s %s\n" "$i" "$format" "$keyfile"
+        local expiry=$(get_key_expiry "$keyfile")
+        printf "[%02d] %-25s %-12s %s\n" "$i" "$format" "$expiry" "$keyfile"
         ((i++))
     done
     
@@ -624,7 +644,8 @@ list_keys() {
     for keyfile in /etc/apt/keyrings/*.gpg; do
         [[ -f "$keyfile" ]] || continue
         local format=$(classify_key "$keyfile")
-        printf "[%02d] %-25s %s\n" "$i" "$format" "$keyfile"
+        local expiry=$(get_key_expiry "$keyfile")
+        printf "[%02d] %-25s %-12s %s\n" "$i" "$format" "$expiry" "$keyfile"
         ((i++))
     done
     
@@ -632,7 +653,8 @@ list_keys() {
     for keyfile in /usr/share/keyrings/*.gpg; do
         [[ -f "$keyfile" ]] || continue
         local format=$(classify_key "$keyfile")
-        printf "[%02d] %-25s %s\n" "$i" "$format" "$keyfile"
+        local expiry=$(get_key_expiry "$keyfile")
+        printf "[%02d] %-25s %-12s %s\n" "$i" "$format" "$expiry" "$keyfile"
         ((i++))
     done
     
