@@ -1301,29 +1301,29 @@ lint_sources() {
 # Show help message
 show_help() {
     cat << 'EOF'
-Usage: apt-man [OPTION] [ARGS]
+Usage: apt-man [COMMAND] [OPTIONS] [ARGS]
 Manage APT sources, PPAs, and GPG keys with ease.
 
-Source Management:
-  --list [--keys]              list all sources (optionally with keys)
-  --show ID                    show packages in a source
-  --installed ID               show installed packages from a source
-  --remove ID                  remove all packages from a source
-  --disable ID                 disable a source
-  --enable ID                  enable a disabled source
-  --list-disabled              list disabled sources
-  --upgrade-source OLD NEW     upgrade sources to new release
+Commands:
+  list [--keys]                list all sources (optionally with keys)
+  show ID                      show packages in a source
+  installed ID                 show installed packages from a source
+  remove ID                    remove all packages from a source
+  disable ID                   disable a source
+  enable ID                    enable a disabled source
+  list-disabled                list disabled sources
+  upgrade-source OLD NEW       upgrade sources to new release
+  lint                         comprehensive security audit of sources and keys
+  
+  keys [OPTIONS]               manage GPG keys
+    --list                     list all GPG keys (default)
+    --check                    check for missing or problematic keys
+    --refresh                  refresh keys from keyservers
+    --info KEYFILE             show detailed info about a key
 
-Key Management:
-  --keys                       list all GPG keys
-  --check-keys                 check for missing or problematic keys
-  --refresh-keys               refresh keys from keyservers
-  --key-info KEYFILE           show detailed info about a key
-  --lint                       comprehensive security audit of sources and keys
-
-General:
-  --help                       display this help and exit
-  --version                    output version information and exit
+General Options:
+  --help, -h                   display this help and exit
+  --version, -V                output version information and exit
 
 Key Format Classifications:
   OLD (deprecated)             /etc/apt/trusted.gpg (single file)
@@ -1333,12 +1333,13 @@ Key Format Classifications:
   INLINE (embedded key)        embedded in .sources files
 
 Examples:
-  apt-man --list                List all sources
-  apt-man --list --keys         List sources with their keys
-  apt-man --disable 5           Disable source ID 5
-  apt-man --lint                Run comprehensive security audit
-  apt-man --check-keys          Check for key problems
-  apt-man --key-info /etc/apt/keyrings/microsoft.gpg
+  apt-man list                 List all sources
+  apt-man list --keys          List sources with their keys
+  apt-man disable 5            Disable source ID 5
+  apt-man lint                 Run comprehensive security audit
+  apt-man keys --check         Check for key problems
+  apt-man keys --info /etc/apt/keyrings/microsoft.gpg
+  apt-man upgrade-source noble oracular
 
 Exit status:
   0  if OK,
@@ -1364,16 +1365,31 @@ EOF
 }
 
 # CLI entry
-case "${1:-}" in
-    --help|-h)
+# Parse command (first argument)
+COMMAND="${1:-}"
+
+# Handle help and version first
+case "$COMMAND" in
+    --help|-h|help)
         show_help
         exit 0
         ;;
-    --version|-V)
+    --version|-V|version)
         show_version
         exit 0
         ;;
-    --list)
+esac
+
+# Handle empty command
+if [[ -z "$COMMAND" ]]; then
+    echo "apt-man: missing command" >&2
+    echo "Try 'apt-man --help' for more information." >&2
+    exit 1
+fi
+
+# Main command dispatcher
+case "$COMMAND" in
+    list|--list)
         if [[ "${2:-}" == "--keys" ]]; then
             list_sources_with_keys
         else
@@ -1381,40 +1397,80 @@ case "${1:-}" in
             list_sources
         fi
         ;;
-    --keys)
-        list_keys
-        ;;
-    --show)
-        [[ $# -eq 2 ]] || { echo "Usage: $0 --show <id>"; exit 1; }
+    
+    show|--show)
+        [[ $# -eq 2 ]] || { echo "Usage: apt-man show <id>"; exit 1; }
         show_packages "$2"
         ;;
-    --installed)
-        [[ $# -eq 2 ]] || { echo "Usage: $0 --installed <id>"; exit 1; }
+    
+    installed|--installed)
+        [[ $# -eq 2 ]] || { echo "Usage: apt-man installed <id>"; exit 1; }
         show_installed "$2"
         ;;
-    --remove)
-        [[ $# -eq 2 ]] || { echo "Usage: $0 --remove <id>"; exit 1; }
+    
+    remove|--remove)
+        [[ $# -eq 2 ]] || { echo "Usage: apt-man remove <id>"; exit 1; }
         remove_packages "$2"
         ;;
-    --upgrade-source)
-        [[ $# -eq 3 ]] || { echo "Usage: $0 --upgrade-source <old> <new>"; exit 1; }
-        upgrade_sources "$2" "$3"
-        ;;
-    --disable)
-        [[ $# -eq 2 ]] || { echo "Usage: $0 --disable <id>"; exit 1; }
+    
+    disable|--disable)
+        [[ $# -eq 2 ]] || { echo "Usage: apt-man disable <id>"; exit 1; }
         rm -f /tmp/sources_index
         list_sources > /dev/null
         disable_source "$2"
         ;;
-    --enable)
-        [[ $# -eq 2 ]] || { echo "Usage: $0 --enable <id>"; exit 1; }
+    
+    enable|--enable)
+        [[ $# -eq 2 ]] || { echo "Usage: apt-man enable <id>"; exit 1; }
         rm -f /tmp/sources_index
         list_sources > /dev/null
         enable_source "$2"
         ;;
-    --list-disabled)
+    
+    list-disabled|--list-disabled)
         list_disabled
         ;;
+    
+    upgrade-source|--upgrade-source)
+        [[ $# -eq 3 ]] || { echo "Usage: apt-man upgrade-source <old> <new>"; exit 1; }
+        upgrade_sources "$2" "$3"
+        ;;
+    
+    lint|--lint)
+        lint_sources
+        ;;
+    
+    keys|--keys)
+        # Sub-command for keys
+        KEYS_CMD="${2:---list}"
+        case "$KEYS_CMD" in
+            --list|list)
+                list_keys
+                ;;
+            --check|check)
+                check_missing_keys
+                ;;
+            --refresh|refresh)
+                refresh_keys
+                ;;
+            --info|info)
+                [[ $# -eq 3 ]] || { echo "Usage: apt-man keys --info <keyfile>"; exit 1; }
+                show_key_details "$3"
+                ;;
+            *)
+                # For backwards compatibility, if no sub-command, just list keys
+                if [[ "$KEYS_CMD" == "--"* ]] || [[ -z "$KEYS_CMD" ]]; then
+                    list_keys
+                else
+                    echo "apt-man keys: invalid option -- '$KEYS_CMD'" >&2
+                    echo "Try 'apt-man --help' for more information." >&2
+                    exit 1
+                fi
+                ;;
+        esac
+        ;;
+    
+    # Backwards compatibility for old commands
     --check-keys)
         check_missing_keys
         ;;
@@ -1422,19 +1478,12 @@ case "${1:-}" in
         refresh_keys
         ;;
     --key-info)
-        [[ $# -eq 2 ]] || { echo "Usage: $0 --key-info <keyfile>"; exit 1; }
+        [[ $# -eq 2 ]] || { echo "Usage: apt-man --key-info <keyfile>"; exit 1; }
         show_key_details "$2"
         ;;
-    --lint)
-        lint_sources
-        ;;
-    "")
-        echo "apt-man: missing operand" >&2
-        echo "Try 'apt-man --help' for more information." >&2
-        exit 1
-        ;;
+    
     *)
-        echo "apt-man: invalid option -- '$1'" >&2
+        echo "apt-man: invalid command -- '$COMMAND'" >&2
         echo "Try 'apt-man --help' for more information." >&2
         exit 1
         ;;
