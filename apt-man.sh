@@ -197,8 +197,19 @@ show_installed() {
 remove_packages() {
     local id="$1"
     local url
+    local file
     url=$(grep "^$id|" /tmp/sources_index | cut -d'|' -f3)
-    echo "Finding packages installed from $url..."
+    file=$(grep "^$id|" /tmp/sources_index | cut -d'|' -f2)
+    
+    if [[ -z "$url" || -z "$file" ]]; then
+        echo "Error: Source ID $id not found"
+        return 1
+    fi
+    
+    echo "Source: $url"
+    echo "File: $file"
+    echo ""
+    echo "Finding packages installed from this source..."
     
     local packages=()
     for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
@@ -207,16 +218,85 @@ remove_packages() {
         fi
     done
     
-    if [ ${#packages[@]} -eq 0 ]; then
-        echo "No packages found from this source."
-        return 0
+    # Step 1: Handle installed packages
+    if [ ${#packages[@]} -gt 0 ]; then
+        echo "Found ${#packages[@]} package(s) installed from this source:"
+        printf '  %s\n' "${packages[@]}"
+        echo ""
+        read -p "Remove these packages? [y/N] " -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "Running: sudo apt remove ${packages[*]}"
+            sudo apt remove "${packages[@]}"
+        else
+            echo "Skipping package removal."
+        fi
+        echo ""
+    else
+        echo "No packages installed from this source."
+        echo ""
     fi
     
-    echo "Found ${#packages[@]} package(s) from this source:"
-    printf '  %s\n' "${packages[@]}"
-    echo ""
-    echo "Running: sudo apt remove ${packages[*]}"
-    sudo apt remove "${packages[@]}"
+    # Step 2: Offer to disable/remove the source file
+    if [[ "$file" == "$MAIN_LIST" ]]; then
+        echo "Cannot remove main sources.list file."
+    else
+        echo "Source file: $file"
+        read -p "Disable this source (rename to .disabled)? [y/N] " -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            if [[ -f "$file" ]]; then
+                sudo mv "$file" "$file.disabled"
+                echo "Source disabled: $file.disabled"
+            elif [[ -f "$file.disabled" ]]; then
+                echo "Source already disabled: $file.disabled"
+            else
+                echo "Source file not found: $file"
+            fi
+        else
+            echo "Source file left unchanged."
+        fi
+        echo ""
+    fi
+    
+    # Step 3: Offer to remove associated keys (for .sources files)
+    if [[ "$file" =~ \.sources$ ]] || [[ "$file" =~ \.sources\.disabled$ ]]; then
+        local actual_file="$file"
+        [[ ! -f "$actual_file" ]] && actual_file="$file.disabled"
+        
+        if [[ -f "$actual_file" ]]; then
+            local keys=()
+            while IFS='|' read -r src_url key; do
+                [[ -n "$key" ]] && [[ "$key" != "none" ]] && [[ ! "$key" =~ ^-----BEGIN ]] && keys+=("$key")
+            done < <(parse_deb822_stanzas "$actual_file")
+            
+            if [ ${#keys[@]} -gt 0 ]; then
+                echo "Found ${#keys[@]} associated key(s):"
+                printf '  %s\n' "${keys[@]}"
+                echo ""
+                echo "WARNING: Removing keys may affect other sources using the same keys."
+                read -p "Remove these keys? [y/N] " -n 1 -r
+                echo
+                
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    for key in "${keys[@]}"; do
+                        if [[ -f "$key" ]]; then
+                            echo "Removing: $key"
+                            sudo rm "$key"
+                        fi
+                    done
+                    echo "Keys removed."
+                else
+                    echo "Keys left unchanged."
+                fi
+                echo ""
+            fi
+        fi
+    fi
+    
+    echo "Done. Run 'sudo apt update' to refresh package lists."
 }
 
 # 5. Upgrade all sources to a new codename
@@ -2147,6 +2227,8 @@ case "$COMMAND" in
     
     remove)
         [[ $# -eq 2 ]] || { echo "Usage: apt-man remove <id>"; exit 1; }
+        rm -f /tmp/sources_index
+        list_sources > /dev/null
         remove_packages "$2"
         ;;
     
