@@ -47,6 +47,23 @@ For example, to upgrade from "noble" to "oracular".
 .B lint
 Comprehensive security audit of all sources and keys. Performs 17 different
 security checks including key validation, source configuration, and file permissions.
+.TP
+.B lint \-\-fix
+Interactively fix security warnings found by the audit. This command:
+.RS
+.IP \(bu 2
+Scans for HTTP sources and tests if HTTPS is available
+.IP \(bu 2
+Identifies legacy keys that should be moved to modern locations
+.IP \(bu 2
+Prompts for confirmation before each change
+.IP \(bu 2
+Creates backups of all modified files
+.IP \(bu 2
+Provides clear instructions for manual steps
+.RE
+.IP
+Changes are applied carefully to avoid breaking your APT configuration.
 
 .SS "Security Fix Commands"
 .TP
@@ -143,6 +160,9 @@ Disable the source with ID 5.
 .TP
 .B apt-man lint
 Run comprehensive security audit with 17 checks.
+.TP
+.B apt-man lint \-\-fix
+Interactively fix security warnings with confirmation prompts.
 .TP
 .B apt-man migrate 3
 Convert source ID 3 from .list to .sources format.

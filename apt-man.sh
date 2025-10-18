@@ -1288,12 +1288,167 @@ lint_sources() {
         echo "  apt-man keys --move <id>   - Move keys to /etc/apt/keyrings/"
         echo "  apt-man use-https <id>     - Convert HTTP to HTTPS"
         echo "  apt-man keys --renewal     - Show keys expiring soon"
+        echo ""
+        echo "Or run: apt-man lint --fix  (to attempt automatic fixes)"
         return 0
     else
         echo "Result: EXCELLENT - All security checks passed!"
         echo ""
         echo "Your APT configuration follows current best practices."
         return 0
+    fi
+}
+
+# Auto-fix lint warnings interactively
+lint_fix() {
+    echo "============================================"
+    echo "APT SECURITY AUTO-FIX"
+    echo "============================================"
+    echo ""
+    echo "This will scan for security issues and attempt to fix them."
+    echo "You will be prompted before each change."
+    echo ""
+    
+    local fixes_applied=0
+    local fixes_skipped=0
+    local fixes_failed=0
+    
+    # Create a backup directory
+    local backup_dir="/tmp/apt-man-backup-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$backup_dir"
+    echo "Backup directory: $backup_dir"
+    echo ""
+    
+    # Collect HTTP sources that need fixing
+    echo "Scanning for HTTP sources..."
+    rm -f /tmp/sources_index
+    list_sources > /dev/null
+    
+    local http_sources=()
+    while IFS='|' read -r id file url rest; do
+        if [[ "$url" =~ ^http:// ]]; then
+            http_sources+=("$id|$file|$url")
+        fi
+    done < /tmp/sources_index
+    
+    if [[ ${#http_sources[@]} -gt 0 ]]; then
+        echo "Found ${#http_sources[@]} HTTP source(s) that should use HTTPS"
+        echo ""
+        
+        for source_info in "${http_sources[@]}"; do
+            IFS='|' read -r id file url <<< "$source_info"
+            local https_url="${url/http:/https:}"
+            
+            echo "Source ID $id: $url"
+            echo "  File: $file"
+            echo "  Would change to: $https_url"
+            
+            # Test if HTTPS works
+            if curl -sf --max-time 5 --head "$https_url" >/dev/null 2>&1; then
+                echo "  Status: HTTPS URL is reachable"
+                read -p "  Fix this source? [y/N] " -n 1 -r
+                echo
+                
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    # Backup the file
+                    sudo cp "$file" "$backup_dir/$(basename "$file")"
+                    
+                    # Apply the fix
+                    if sudo sed -i "s|http://|https://|g" "$file" 2>/dev/null; then
+                        echo "  SUCCESS: Converted to HTTPS"
+                        fixes_applied=$((fixes_applied + 1))
+                    else
+                        echo "  ERROR: Failed to update file"
+                        fixes_failed=$((fixes_failed + 1))
+                    fi
+                else
+                    echo "  SKIPPED"
+                    fixes_skipped=$((fixes_skipped + 1))
+                fi
+            else
+                echo "  Status: HTTPS URL not reachable - CANNOT AUTO-FIX"
+                echo "  This repository may not support HTTPS"
+                fixes_skipped=$((fixes_skipped + 1))
+            fi
+            echo ""
+        done
+    else
+        echo "No HTTP sources found"
+        echo ""
+    fi
+    
+    # Collect legacy keys that need moving
+    echo "Scanning for legacy keys in trusted.gpg.d/..."
+    local legacy_keys=()
+    
+    for keyfile in /etc/apt/trusted.gpg.d/*.gpg; do
+        [[ -f "$keyfile" ]] || continue
+        legacy_keys+=("$keyfile")
+    done
+    
+    if [[ ${#legacy_keys[@]} -gt 0 ]]; then
+        echo "Found ${#legacy_keys[@]} legacy key(s) in trusted.gpg.d/"
+        echo ""
+        echo "WARNING: Moving keys requires updating .sources files manually."
+        echo "This is a complex operation that should be done carefully."
+        echo ""
+        
+        for keyfile in "${legacy_keys[@]}"; do
+            local basename=$(basename "$keyfile")
+            local newfile="/etc/apt/keyrings/$basename"
+            
+            echo "Key: $keyfile"
+            echo "  Would move to: $newfile"
+            read -p "  Move this key? [y/N] " -n 1 -r
+            echo
+            
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                # Create keyrings directory if needed
+                if [[ ! -d "/etc/apt/keyrings" ]]; then
+                    sudo mkdir -p /etc/apt/keyrings
+                    sudo chmod 755 /etc/apt/keyrings
+                fi
+                
+                # Copy the key
+                if sudo cp "$keyfile" "$newfile" 2>/dev/null && sudo chmod 644 "$newfile" 2>/dev/null; then
+                    echo "  SUCCESS: Key copied to $newfile"
+                    echo "  IMPORTANT: Update your .sources files to reference: $newfile"
+                    echo "  Test with 'sudo apt update' before removing: $keyfile"
+                    fixes_applied=$((fixes_applied + 1))
+                else
+                    echo "  ERROR: Failed to copy key"
+                    fixes_failed=$((fixes_failed + 1))
+                fi
+            else
+                echo "  SKIPPED"
+                fixes_skipped=$((fixes_skipped + 1))
+            fi
+            echo ""
+        done
+    else
+        echo "No legacy keys found in trusted.gpg.d/"
+        echo ""
+    fi
+    
+    # Summary
+    echo "============================================"
+    echo "AUTO-FIX SUMMARY"
+    echo "============================================"
+    echo "Fixes applied:  $fixes_applied"
+    echo "Fixes skipped:  $fixes_skipped"
+    echo "Fixes failed:   $fixes_failed"
+    echo ""
+    
+    if [[ $fixes_applied -gt 0 ]]; then
+        echo "Changes have been applied. Run 'sudo apt update' to test."
+        echo "Backups saved in: $backup_dir"
+        echo ""
+        echo "To revert changes, restore files from the backup directory."
+        echo ""
+        echo "Run 'apt-man lint' again to verify the fixes."
+    else
+        echo "No changes were made."
+        rmdir "$backup_dir" 2>/dev/null || true
     fi
 }
 
@@ -1455,6 +1610,7 @@ Commands:
   list-disabled                list disabled sources
   upgrade-source OLD NEW       upgrade sources to new release
   lint                         comprehensive security audit of sources and keys
+  lint --fix                   interactively fix security warnings
   
   migrate ID                   convert .list file to .sources format
   use-https ID                 convert HTTP source to HTTPS
@@ -1587,7 +1743,11 @@ case "$COMMAND" in
         ;;
     
     lint)
-        lint_sources
+        if [[ "${2:-}" == "--fix" ]]; then
+            lint_fix
+        else
+            lint_sources
+        fi
         ;;
     
     migrate)

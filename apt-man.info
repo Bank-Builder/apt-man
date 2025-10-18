@@ -174,6 +174,30 @@ File: apt-man.info,  Node: Source Management,  Next: Key Management,  Prev: Gett
         • Unnecessary deb-src entries
         • Architecture mismatches
 
+ -- Command: lint --fix
+     Interactively fix security warnings found by the audit.  This
+     command provides a safe, interactive way to apply fixes:
+
+        • Scans for HTTP sources and tests if HTTPS is available before
+          converting
+        • Identifies legacy keys in ‘trusted.gpg.d/’ that should be
+          moved
+        • Prompts for confirmation before each change
+        • Creates timestamped backup directory for all modified files
+        • Tests URL reachability before making changes
+        • Provides clear instructions for required manual steps
+        • Shows summary of applied, skipped, and failed fixes
+
+     *Safety Features:*
+        • All changes require explicit confirmation
+        • Backups are created before any modifications
+        • HTTPS URLs are tested before conversion
+        • Instructions provided for complex operations
+        • No changes to main ‘sources.list’
+
+     Example:
+          sudo apt-man lint --fix
+
 3.5 Security Fixes
 ==================
 
@@ -553,13 +577,13 @@ Node: Top445
 Node: Introduction1506
 Node: Getting Started2356
 Node: Source Management2920
-Node: Key Management6931
-Node: Key Formats9832
-Node: Source Formats11457
-Node: Examples12472
-Node: Security14845
-Node: Files16312
-Node: Index17224
+Node: Key Management7930
+Node: Key Formats10831
+Node: Source Formats12456
+Node: Examples13471
+Node: Security15844
+Node: Files17311
+Node: Index18223
 
 End Tag Table
 

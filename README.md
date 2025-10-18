@@ -83,6 +83,11 @@ Run comprehensive security audit:
 apt-man lint
 ```
 
+Interactively fix security warnings:
+```bash
+apt-man lint --fix
+```
+
 Disable a source (by ID from list):
 ```bash
 apt-man disable 5
@@ -295,17 +300,17 @@ apt-man disable 4
 # Run security audit
 apt-man lint
 
-# Fix HTTP sources
-apt-man use-https 7
+# Option 1: Use interactive auto-fix (recommended)
+sudo apt-man lint --fix
 
-# Migrate old format files
-apt-man migrate 3
+# Option 2: Fix issues manually
+apt-man use-https 7                              # Fix HTTP sources
+apt-man migrate 3                                # Migrate old format files
+apt-man keys --move /etc/apt/trusted.gpg.d/old.gpg  # Move legacy keys
+apt-man keys --renewal                           # Check for expiring keys
 
-# Move legacy keys
-apt-man keys --move /etc/apt/trusted.gpg.d/old.gpg
-
-# Check for expiring keys
-apt-man keys --renewal
+# Test the changes
+sudo apt update
 
 # Verify all fixed
 apt-man lint

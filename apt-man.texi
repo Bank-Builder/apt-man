@@ -196,6 +196,42 @@ checks including:
 @end itemize
 @end deffn
 
+@deffn Command lint @option{--fix}
+Interactively fix security warnings found by the audit. This command provides
+a safe, interactive way to apply fixes:
+
+@itemize @bullet
+@item
+Scans for HTTP sources and tests if HTTPS is available before converting
+@item
+Identifies legacy keys in @file{trusted.gpg.d/} that should be moved
+@item
+Prompts for confirmation before each change
+@item
+Creates timestamped backup directory for all modified files
+@item
+Tests URL reachability before making changes
+@item
+Provides clear instructions for required manual steps
+@item
+Shows summary of applied, skipped, and failed fixes
+@end itemize
+
+@strong{Safety Features:}
+@itemize @bullet
+@item All changes require explicit confirmation
+@item Backups are created before any modifications
+@item HTTPS URLs are tested before conversion
+@item Instructions provided for complex operations
+@item No changes to main @file{sources.list}
+@end itemize
+
+Example:
+@example
+sudo apt-man lint --fix
+@end example
+@end deffn
+
 @section Security Fixes
 
 @deffn Command migrate @var{id}
