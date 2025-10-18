@@ -193,7 +193,13 @@ show_packages() {
     local packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages"
     local packages=$(curl -s "$packages_url" 2>/dev/null)
     
-    # If standard structure fails, try flat structure (like NVIDIA)
+    # If standard structure fails, try compressed Packages files (like PPAs)
+    if [[ ! "$packages" =~ ^Package: ]]; then
+        packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages.gz"
+        packages=$(curl -s "$packages_url" 2>/dev/null | gunzip 2>/dev/null)
+    fi
+    
+    # If compressed fails, try flat structure (like NVIDIA)
     if [[ ! "$packages" =~ ^Package: ]]; then
         packages_url="${url}/Packages"
         packages=$(curl -s "$packages_url" 2>/dev/null)
@@ -209,6 +215,7 @@ show_packages() {
         
         # Try common alternative paths
         local alternatives=(
+            "${url}/dists/${repo_codename}/main/binary-amd64/Packages.gz"
             "${url}/dists/${CODENAME}/main/binary-amd64/Packages"
             "${url}/dists/main/binary-amd64/Packages"
             "${url}/dists/${repo_codename}/Packages"
@@ -217,6 +224,12 @@ show_packages() {
         for alt_url in "${alternatives[@]}"; do
             echo "Trying: $alt_url"
             local alt_packages=$(curl -s "$alt_url" 2>/dev/null)
+            
+            # If it's a compressed file, decompress it
+            if [[ "$alt_url" =~ \.gz$ ]]; then
+                alt_packages=$(echo "$alt_packages" | gunzip 2>/dev/null)
+            fi
+            
             if [[ "$alt_packages" =~ ^Package: ]]; then
                 echo "$alt_packages" | grep -E '^Package: ' | awk '{print $2}' | sort | uniq
                 break
@@ -251,7 +264,13 @@ show_installed() {
     local packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages"
     local available_packages=$(curl -s "$packages_url" 2>/dev/null)
     
-    # If standard structure fails, try flat structure (like NVIDIA)
+    # If standard structure fails, try compressed Packages files (like PPAs)
+    if [[ ! "$available_packages" =~ ^Package: ]]; then
+        packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages.gz"
+        available_packages=$(curl -s "$packages_url" 2>/dev/null | gunzip 2>/dev/null)
+    fi
+    
+    # If compressed fails, try flat structure (like NVIDIA)
     if [[ ! "$available_packages" =~ ^Package: ]]; then
         packages_url="${url}/Packages"
         available_packages=$(curl -s "$packages_url" 2>/dev/null)
