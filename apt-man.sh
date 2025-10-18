@@ -1030,6 +1030,67 @@ lint_sources() {
         checks_passed=$((checks_passed + 1))
     fi
     
+    # Check 14: Missing security repositories
+    echo "[CHECK 14] Missing security update repositories"
+    local has_main_repo=0
+    local has_security_repo=0
+    
+    # Check for Ubuntu official repos
+    for file in "$SOURCES_DIR"/*.list; do
+        [[ -f "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        while read -r line; do
+            [[ "$line" =~ ^deb ]] || continue
+            if [[ "$line" =~ archive\.ubuntu\.com ]]; then
+                has_main_repo=1
+            fi
+            if [[ "$line" =~ security\.ubuntu\.com ]] || [[ "$line" =~ -security ]]; then
+                has_security_repo=1
+            fi
+        done < "$file"
+    done
+    
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        
+        while IFS='|' read -r url key; do
+            [[ -n "$url" ]] || continue
+            if [[ "$url" =~ archive\.ubuntu\.com ]]; then
+                has_main_repo=1
+            fi
+            if [[ "$url" =~ security\.ubuntu\.com ]]; then
+                has_security_repo=1
+            fi
+        done < <(parse_deb822_stanzas "$file")
+        
+        # Also check Suites field for -security
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^Suites:[[:space:]]*(.+)$ ]]; then
+                if [[ "${BASH_REMATCH[1]}" =~ -security ]]; then
+                    has_security_repo=1
+                fi
+            fi
+        done < "$file"
+    done
+    
+    if [[ $has_main_repo -eq 1 ]] && [[ $has_security_repo -eq 0 ]]; then
+        echo "  [FAIL] Main Ubuntu repository found but NO security repository"
+        echo "         Your system will NOT receive security updates"
+        echo "         Recommendation: Add security.ubuntu.com or -security suite"
+        echo ""
+        issues_found=$((issues_found + 1))
+    elif [[ $has_main_repo -eq 0 ]]; then
+        echo "  [WARN] No Ubuntu official repositories found"
+        echo ""
+        warnings_found=$((warnings_found + 1))
+    else
+        echo "  [PASS] Security repository is configured"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
     # Summary
     echo "============================================"
     echo "LINT SUMMARY"
