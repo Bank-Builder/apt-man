@@ -209,14 +209,23 @@ remove_packages() {
     echo "Source: $url"
     echo "File: $file"
     echo ""
-    echo "Finding packages installed from this source..."
     
     local packages=()
-    for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
-        if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
-            packages+=("$pkg")
-        fi
-    done
+    local is_disabled=0
+    
+    # Check if source is disabled
+    if [[ "$file" =~ \.disabled$ ]]; then
+        is_disabled=1
+        echo "Source is disabled. Skipping package search (disabled sources don't show in apt-cache)."
+        echo ""
+    else
+        echo "Finding packages installed from this source..."
+        for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
+            if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
+                packages+=("$pkg")
+            fi
+        done
+    fi
     
     # Step 1: Handle installed packages
     if [ ${#packages[@]} -gt 0 ]; then
@@ -242,21 +251,38 @@ remove_packages() {
     if [[ "$file" == "$MAIN_LIST" ]]; then
         echo "Cannot remove main sources.list file."
     else
-        echo "Source file: $file"
-        read -p "Disable this source (rename to .disabled)? [y/N] " -n 1 -r
-        echo
-        
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            if [[ -f "$file" ]]; then
-                sudo mv "$file" "$file.disabled"
-                echo "Source disabled: $file.disabled"
-            elif [[ -f "$file.disabled" ]]; then
-                echo "Source already disabled: $file.disabled"
+        if [[ $is_disabled -eq 1 ]]; then
+            # Source is already disabled, offer to remove it completely
+            echo "Source file: $file"
+            read -p "Remove this disabled source file permanently? [y/N] " -n 1 -r
+            echo
+            
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                if [[ -f "$file" ]]; then
+                    sudo rm "$file"
+                    echo "Source file removed: $file"
+                else
+                    echo "Source file not found: $file"
+                fi
             else
-                echo "Source file not found: $file"
+                echo "Source file left unchanged."
             fi
         else
-            echo "Source file left unchanged."
+            # Source is enabled, offer to disable it
+            echo "Source file: $file"
+            read -p "Disable this source (rename to .disabled)? [y/N] " -n 1 -r
+            echo
+            
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                if [[ -f "$file" ]]; then
+                    sudo mv "$file" "$file.disabled"
+                    echo "Source disabled: $file.disabled"
+                else
+                    echo "Source file not found: $file"
+                fi
+            else
+                echo "Source file left unchanged."
+            fi
         fi
         echo ""
     fi
