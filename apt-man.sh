@@ -846,7 +846,110 @@ dedupe_sources() {
     echo "Run 'sudo apt update' to refresh package lists."
 }
 
-# 12. Check for missing keys
+# 12. Fix broken package dependencies
+fix_deps() {
+    echo "Fixing broken package dependencies..."
+    echo "--------------------------------------"
+    
+    echo "Step 1: Fixing broken packages..."
+    sudo apt --fix-broken install
+    
+    echo ""
+    echo "Step 2: Removing unused packages..."
+    sudo apt autoremove
+    
+    echo ""
+    echo "Step 3: Cleaning package cache..."
+    sudo apt autoclean
+    
+    echo ""
+    echo "Dependency fix complete!"
+    echo "--------------------------------------"
+}
+
+# 13. Cache management
+cache_clean() {
+    echo "Cleaning APT cache..."
+    echo "--------------------------------------"
+    
+    echo "Cleaning package cache..."
+    sudo apt clean
+    
+    echo "Cleaning partial downloads..."
+    sudo apt autoclean
+    
+    echo "Cache cleaned successfully!"
+    echo "--------------------------------------"
+}
+
+cache_update() {
+    echo "Updating package lists..."
+    echo "--------------------------------------"
+    
+    sudo apt update
+    
+    echo "Package lists updated successfully!"
+    echo "--------------------------------------"
+}
+
+cache_purge() {
+    echo "Purging all APT cache..."
+    echo "--------------------------------------"
+    
+    echo "WARNING: This will remove all cached package files."
+    echo "This may slow down future package operations until cache rebuilds."
+    echo ""
+    
+    read -p "Continue with cache purge? [y/N] " -n 1 -r
+    echo
+    
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Cache purge cancelled."
+        return 0
+    fi
+    
+    echo "Purging package cache..."
+    sudo apt clean
+    
+    echo "Purging partial downloads..."
+    sudo apt autoclean
+    
+    echo "Removing APT cache directories..."
+    sudo rm -rf /var/cache/apt/archives/*
+    sudo rm -rf /var/lib/apt/lists/*
+    
+    echo "Cache purged successfully!"
+    echo "Run 'sudo apt update' to rebuild package lists."
+    echo "--------------------------------------"
+}
+
+# 14. List held packages
+list_held() {
+    echo "Held packages (prevented from automatic updates):"
+    echo "--------------------------------------"
+    
+    local held_packages=$(apt-mark showhold)
+    
+    if [[ -z "$held_packages" ]]; then
+        echo "No packages are currently held."
+    else
+        echo "$held_packages" | while read -r package; do
+            [[ -n "$package" ]] || continue
+            
+            # Get package version and source
+            local version=$(dpkg-query -W -f='${Version}' "$package" 2>/dev/null)
+            local source=$(apt-cache policy "$package" 2>/dev/null | grep -A1 "Installed:" | tail -1 | awk '{print $2}')
+            
+            printf "%-30s %-20s %s\n" "$package" "$version" "$source"
+        done
+    fi
+    
+    echo "--------------------------------------"
+    echo "To unhold a package: sudo apt-mark unhold <package>"
+    echo "To hold a package: sudo apt-mark hold <package>"
+}
+
+# 15. Check for missing keys
 check_missing_keys() {
     echo "Checking for missing or problematic keys..."
     echo "--------------------------------------"
@@ -2452,6 +2555,12 @@ Commands:
   enable ID                    enable a disabled source
   list-disabled                list disabled sources
   dedupe                       detect and remove duplicate sources
+  fix-deps                     fix broken package dependencies
+  cache [OPTION]               manage APT cache
+    --clean                    clean package cache
+    --update                   update package lists  
+    --purge                    purge all cache files
+  held                         list held packages
   upgrade-source OLD NEW       upgrade sources to new release
   lint                         comprehensive security audit of sources and keys
   lint --fix                   interactively fix warnings (HTTP, keys, unreachable)
@@ -2595,6 +2704,35 @@ case "$COMMAND" in
     
     dedupe)
         dedupe_sources
+        ;;
+    
+    fix-deps)
+        fix_deps
+        ;;
+    
+    cache)
+        case "${2:-}" in
+            --clean|clean)
+                cache_clean
+                ;;
+            --update|update)
+                cache_update
+                ;;
+            --purge|purge)
+                cache_purge
+                ;;
+            *)
+                echo "Usage: apt-man cache [--clean|--update|--purge]"
+                echo "  --clean   Clean package cache"
+                echo "  --update  Update package lists"
+                echo "  --purge   Purge all cache files"
+                exit 1
+                ;;
+        esac
+        ;;
+    
+    held)
+        list_held
         ;;
     
     upgrade-source)
