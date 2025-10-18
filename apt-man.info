@@ -207,9 +207,40 @@ File: apt-man.info,  Node: Source Management,  Next: Key Management,  Prev: Gett
         • Instructions provided for complex operations
         • No changes to main ‘sources.list’
         • Removal requires double confirmation
+        • Manifest file tracks all changes for revert
+
+     *Manifest Tracking:* Every change is recorded in ‘MANIFEST.txt’ in
+     the backup directory.  This allows complete reversion of all
+     changes using ‘apt-man revert’.
 
      Example:
           sudo apt-man lint --fix
+
+ -- Command: revert [NUMBER|PATH]
+     Revert changes made by ‘lint --fix’ using the manifest file.
+
+     *Without arguments:* Lists all available backups in
+     ‘/tmp/apt-man-backup-*’ showing timestamps and number of changes in
+     each.
+
+     *With a number:* Reverts the Nth backup (1 is most recent, 2 is
+     second-most recent, etc.).
+
+     *With a path:* Reverts the specific backup directory.
+
+     The manifest tracks all changes made during ‘lint --fix’:
+        • HTTP to HTTPS conversions
+        • Legacy key moves to modern locations
+        • Source disables and removals
+        • Configuration file updates
+
+     Each action is reverted in the correct order, restoring your system
+     to its previous state.
+
+     Examples:
+          apt-man revert                # List available backups
+          sudo apt-man revert 1         # Revert most recent changes
+          sudo apt-man revert /tmp/apt-man-backup-20251018-134256
 
 3.5 Security Fixes
 ==================
@@ -597,13 +628,13 @@ Node: Top445
 Node: Introduction1506
 Node: Getting Started2356
 Node: Source Management2920
-Node: Key Management8522
-Node: Key Formats11760
-Node: Source Formats13385
-Node: Examples14400
-Node: Security16773
-Node: Files18240
-Node: Index19152
+Node: Key Management9728
+Node: Key Formats12966
+Node: Source Formats14591
+Node: Examples15606
+Node: Security17979
+Node: Files19446
+Node: Index20358
 
 End Tag Table
 

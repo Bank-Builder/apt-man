@@ -62,13 +62,20 @@ Detects unreachable sources and offers to disable or remove them
 .IP \(bu 2
 Prompts for confirmation before each change
 .IP \(bu 2
-Creates timestamped backup directory for all modified files
+Creates timestamped backup directory with MANIFEST.txt tracking file
 .IP \(bu 2
 Provides clear instructions for manual steps
 .RE
 .IP
 Changes are applied carefully to avoid breaking your APT configuration.
-All backups are saved in /tmp/apt-man-backup-* for recovery if needed.
+All backups and a manifest file are saved in /tmp/apt-man-backup-* for recovery.
+.TP
+.B revert [\fINUMBER\fR|\fIPATH\fR]
+Revert changes made by \fBlint --fix\fR using the manifest file. Without arguments,
+lists all available backups with timestamps and change counts. With a number, reverts
+that backup (1 is most recent). With a path, reverts that specific backup directory.
+The manifest tracks all changes (HTTP/HTTPS conversions, key moves, source
+disable/remove) and reverts them in the correct order.
 
 .SS "Security Fix Commands"
 .TP
@@ -170,6 +177,12 @@ Run comprehensive security audit with 17 checks.
 .TP
 .B apt-man lint \-\-fix
 Interactively fix security warnings with confirmation prompts.
+.TP
+.B apt-man revert
+List all available backups from previous lint --fix sessions.
+.TP
+.B apt-man revert 1
+Revert the most recent lint --fix changes.
 .TP
 .B apt-man migrate 3
 Convert source ID 3 from .list to .sources format.

@@ -239,11 +239,46 @@ When an unreachable source is detected, you can choose to:
 @item Instructions provided for complex operations
 @item No changes to main @file{sources.list}
 @item Removal requires double confirmation
+@item Manifest file tracks all changes for revert
 @end itemize
+
+@strong{Manifest Tracking:}
+Every change is recorded in @file{MANIFEST.txt} in the backup directory.
+This allows complete reversion of all changes using @command{apt-man revert}.
 
 Example:
 @example
 sudo apt-man lint --fix
+@end example
+@end deffn
+
+@deffn Command revert [@var{number}|@var{path}]
+Revert changes made by @command{lint --fix} using the manifest file.
+
+@strong{Without arguments:} Lists all available backups in @file{/tmp/apt-man-backup-*}
+showing timestamps and number of changes in each.
+
+@strong{With a number:} Reverts the Nth backup (1 is most recent, 2 is second-most
+recent, etc.).
+
+@strong{With a path:} Reverts the specific backup directory.
+
+The manifest tracks all changes made during @command{lint --fix}:
+@itemize @bullet
+@item HTTP to HTTPS conversions
+@item Legacy key moves to modern locations
+@item Source disables and removals
+@item Configuration file updates
+@end itemize
+
+Each action is reverted in the correct order, restoring your system to its
+previous state.
+
+Examples:
+@example
+apt-man revert                # List available backups
+sudo apt-man revert 1         # Revert most recent changes
+sudo apt-man revert /tmp/apt-man-backup-20251018-134256
 @end example
 @end deffn
 

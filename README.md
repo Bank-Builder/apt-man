@@ -88,6 +88,12 @@ Interactively fix security warnings (HTTP sources, legacy keys, unreachable sour
 apt-man lint --fix
 ```
 
+List available backups and revert changes:
+```bash
+apt-man revert           # List all backups
+apt-man revert 1         # Revert most recent changes
+```
+
 Disable a source (by ID from list):
 ```bash
 apt-man disable 5
