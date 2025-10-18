@@ -40,13 +40,38 @@ Enable a previously disabled source by removing the .disabled extension.
 .B list-disabled
 List all disabled sources.
 .TP
+.B dedupe
+Detect and remove duplicate sources. Scans all source files for identical URLs,
+shows which files contain duplicates, and offers to remove duplicates while
+keeping the first occurrence. Creates backups before removal.
+.TP
+.B fix-deps
+Fix broken package dependencies with a 3-step process: fix broken packages,
+remove unused packages, and clean package cache.
+.TP
+.B cache [OPTION]
+Manage APT cache with subcommands:
+.RS
+.IP \-\-clean 4
+Clean package cache and partial downloads.
+.IP \-\-update 4
+Update package lists.
+.IP \-\-purge 4
+Purge all cache files with confirmation prompt.
+.RE
+.TP
+.B held
+List held packages (prevented from automatic updates). Shows package name,
+version, and source repository for each held package.
+.TP
 .B upgrade-source \fIOLD\fR \fINEW\fR
 Upgrade all APT sources from OLD release codename to NEW release codename.
 For example, to upgrade from "noble" to "oracular".
 .TP
 .B lint
-Comprehensive security audit of all sources and keys. Performs 17 different
-security checks including key validation, source configuration, and file permissions.
+Comprehensive security and health audit of all sources and keys. Performs 22 different
+checks including key validation, source configuration, file permissions, reachability,
+package conflicts, disk space, orphaned files, and database integrity.
 .TP
 .B lint \-\-fix
 Interactively fix security warnings found by the audit. This command:
@@ -178,8 +203,26 @@ Show available packages in source ID 2.
 .B apt-man disable 5
 Disable the source with ID 5.
 .TP
+.B apt-man dedupe
+Detect and remove duplicate sources.
+.TP
+.B apt-man fix-deps
+Fix broken package dependencies.
+.TP
+.B apt-man cache --clean
+Clean APT package cache.
+.TP
+.B apt-man cache --update
+Update package lists.
+.TP
+.B apt-man cache --purge
+Purge all cache files.
+.TP
+.B apt-man held
+List held packages.
+.TP
 .B apt-man lint
-Run comprehensive security audit with 17 checks.
+Run comprehensive security and health audit with 22 checks.
 .TP
 .B apt-man lint \-\-fix
 Interactively fix security warnings with confirmation prompts.

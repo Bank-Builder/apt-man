@@ -114,7 +114,7 @@ Show available packages in a source:
 apt-man list 2 --available
 ```
 
-Run comprehensive security audit:
+Run comprehensive security and health audit (22 checks):
 ```bash
 apt-man lint
 ```
@@ -138,6 +138,28 @@ apt-man disable 5
 Enable a disabled source:
 ```bash
 apt-man enable 5
+```
+
+Detect and remove duplicate sources:
+```bash
+apt-man dedupe
+```
+
+Fix broken package dependencies:
+```bash
+apt-man fix-deps
+```
+
+Manage APT cache:
+```bash
+apt-man cache --clean     # Clean package cache
+apt-man cache --update    # Update package lists
+apt-man cache --purge     # Purge all cache files
+```
+
+List held packages:
+```bash
+apt-man held
 ```
 
 ### Security Fixes
@@ -209,6 +231,38 @@ This command provides a comprehensive, fail-safe removal workflow:
 3. Prompts to disable the source file (y/N - defaults to No)
 4. Prompts to remove associated keys with warning (y/N - defaults to No)
 5. All steps require explicit user confirmation
+
+### System Maintenance
+
+Fix broken package dependencies:
+```bash
+apt-man fix-deps
+```
+
+Clean APT cache:
+```bash
+apt-man cache --clean
+```
+
+Update package lists:
+```bash
+apt-man cache --update
+```
+
+Purge all cache files (with confirmation):
+```bash
+apt-man cache --purge
+```
+
+List held packages (prevented from updates):
+```bash
+apt-man held
+```
+
+Detect and remove duplicate sources:
+```bash
+apt-man dedupe
+```
 
 ### Release Upgrade
 
