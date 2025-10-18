@@ -39,7 +39,13 @@ A comprehensive command-line tool for managing APT package sources, PPAs, and GP
 sudo make install
 ```
 
-This installs to `/usr/local/bin/` by default. To install to a different location:
+This installs to `/usr/local/bin/` by default and includes:
+- The `apt-man` script
+- Man page
+- Info page  
+- Bash completion
+
+To install to a different location:
 
 ```bash
 sudo make install PREFIX=/usr
@@ -52,16 +58,36 @@ sudo cp apt-man.sh /usr/local/bin/apt-man
 sudo chmod +x /usr/local/bin/apt-man
 ```
 
-### Install Documentation
+### Install Components Separately
 
-Install man page:
+Install man page only:
 ```bash
 sudo make install-man
 ```
 
-Install info page:
+Install info page only:
 ```bash
 sudo make install-info
+```
+
+Install bash completion only:
+```bash
+sudo make install-completion
+```
+
+### Enable Bash Completion
+
+After installation, bash completion is automatically available in new shell sessions.
+For the current session:
+
+```bash
+source /usr/local/share/bash-completion/completions/apt-man
+```
+
+Or if installed to `/usr`:
+
+```bash
+source /usr/share/bash-completion/completions/apt-man
 ```
 
 ## Usage
@@ -191,6 +217,29 @@ info apt-man
 View help:
 ```bash
 apt-man --help
+```
+
+## Bash Completion
+
+The bash completion script provides intelligent autocompletion for:
+
+- **Commands**: `list`, `show`, `disable`, `enable`, `lint`, `revert`, `keys`, etc.
+- **Subcommands**: For `keys` command (`--check`, `--refresh`, `--info`, `--move`, `--renewal`)
+- **Options**: `--keys` for `list`, `--fix` for `lint`
+- **Source IDs**: Dynamically completes with available source IDs for commands like `show`, `disable`, `remove`
+- **Key files**: Completes GPG key file paths in `/etc/apt/keyrings/`, `/etc/apt/trusted.gpg.d/`, `/usr/share/keyrings/`
+- **Backup numbers**: Completes with available backup numbers for `revert` command
+- **Release names**: Completes with Ubuntu release codenames for `upgrade-source`
+
+### Examples:
+```bash
+apt-man <TAB>              # Shows all available commands
+apt-man li<TAB>            # Completes to "list"
+apt-man list <TAB>         # Shows "--keys"
+apt-man disable <TAB>      # Shows available source IDs
+apt-man keys <TAB>         # Shows key subcommands
+apt-man keys --info <TAB>  # Shows available key files
+apt-man revert <TAB>       # Shows backup numbers
 ```
 
 ## Key Format Classifications
