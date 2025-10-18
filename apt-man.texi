@@ -97,17 +97,22 @@ sudo chmod +x /usr/local/bin/apt-man
 
 List all sources:
 @example
-apt-man --list
+apt-man list
 @end example
 
 List sources with their signing keys:
 @example
-apt-man --list --keys
+apt-man list --keys
+@end example
+
+Run comprehensive security audit:
+@example
+apt-man lint
 @end example
 
 Check for key problems:
 @example
-apt-man --check-keys
+apt-man keys --check
 @end example
 
 @node Source Management
@@ -115,7 +120,7 @@ apt-man --check-keys
 
 @section Listing Sources
 
-@deffn Command --list [@option{--keys}]
+@deffn Command list [@option{--keys}]
 List all APT sources, including both active and disabled ones. Sources are
 numbered for easy reference in other commands. If @option{--keys} is specified,
 also shows the GPG signing key for each source.
@@ -126,7 +131,7 @@ Active sources are shown normally, while disabled sources are marked with
 
 @section Enabling and Disabling Sources
 
-@deffn Command --disable @var{id}
+@deffn Command disable @var{id}
 Disable a source by renaming it with a @file{.disabled} extension. The source
 remains on the system but is not used by APT. This is safer than deleting
 sources as they can be easily re-enabled.
@@ -134,30 +139,30 @@ sources as they can be easily re-enabled.
 Cannot be used on the main @file{/etc/apt/sources.list} file.
 @end deffn
 
-@deffn Command --enable @var{id}
+@deffn Command enable @var{id}
 Enable a previously disabled source by removing the @file{.disabled} extension.
 The source becomes active immediately but requires @command{apt update} to
 refresh package lists.
 @end deffn
 
-@deffn Command --list-disabled
+@deffn Command list-disabled
 Show only disabled sources. This is useful for reviewing what sources are
 available but not currently active.
 @end deffn
 
 @section Package Operations
 
-@deffn Command --show @var{id}
+@deffn Command show @var{id}
 Show all packages available in the source identified by @var{id}. This queries
 the repository's package index directly.
 @end deffn
 
-@deffn Command --installed @var{id}
+@deffn Command installed @var{id}
 Show all packages currently installed on your system that came from the source
 identified by @var{id}.
 @end deffn
 
-@deffn Command --remove @var{id}
+@deffn Command remove @var{id}
 Remove all packages installed from the source identified by @var{id}. This is
 useful before removing a third-party repository to avoid leaving orphaned
 packages.
@@ -166,15 +171,40 @@ packages.
 caution.
 @end deffn
 
+@section Security Audit
+
+@deffn Command lint
+Run comprehensive security audit of all sources and keys. Performs 17 different
+checks including:
+@itemize @bullet
+@item Deprecated keyring files
+@item Legacy .list file formats
+@item Sources without explicit keys
+@item Missing or unreadable key files
+@item Keys in legacy locations
+@item Expired or expiring keys
+@item HTTP sources (should use HTTPS)
+@item Weak key algorithms
+@item Duplicate sources
+@item Unreachable URLs
+@item End-of-Life releases
+@item File permissions and ownership
+@item Missing security repositories
+@item Development/testing repositories
+@item Unnecessary deb-src entries
+@item Architecture mismatches
+@end itemize
+@end deffn
+
 @section Upgrading Sources
 
-@deffn Command --upgrade-source @var{old} @var{new}
+@deffn Command upgrade-source @var{old} @var{new}
 Upgrade all APT sources from @var{old} release codename to @var{new} release
 codename. This modifies all source files to reference the new release.
 
 For example, to upgrade from Ubuntu Noble to Oracular:
 @example
-apt-man --upgrade-source noble oracular
+apt-man upgrade-source noble oracular
 @end example
 
 After upgrading sources, run:
@@ -189,15 +219,16 @@ sudo apt dist-upgrade
 
 @section Listing Keys
 
-@deffn Command --keys
+@deffn Command keys [@option{--list}]
 List all GPG keys on the system used for package verification. Keys are
 categorized by their format and location, helping identify outdated key
-storage methods.
+storage methods. This is the default action when using @command{keys}
+without any options.
 @end deffn
 
 @section Checking Keys
 
-@deffn Command --check-keys
+@deffn Command keys @option{--check}
 Validate all sources for missing or problematic GPG keys. This command checks:
 
 @itemize @bullet
@@ -216,7 +247,7 @@ Reports any issues found with actionable information.
 
 @section Refreshing Keys
 
-@deffn Command --refresh-keys
+@deffn Command keys @option{--refresh}
 Refresh GPG keys from keyservers to get updates, revocations, or new
 signatures. This only affects keys in @file{/etc/apt/keyrings/}.
 
@@ -226,7 +257,7 @@ be updated via @command{apt upgrade}.
 
 @section Key Information
 
-@deffn Command --key-info @var{keyfile}
+@deffn Command keys @option{--info} @var{keyfile}
 Show detailed information about a specific GPG key file, including:
 
 @itemize @bullet
@@ -246,7 +277,7 @@ Key UIDs (identities)
 
 Example:
 @example
-apt-man --key-info /etc/apt/keyrings/microsoft.gpg
+apt-man keys --info /etc/apt/keyrings/microsoft.gpg
 @end example
 @end deffn
 
@@ -336,7 +367,7 @@ Better security through explicit trust
 @section Example 1: Listing All Sources
 
 @example
-$ apt-man --list
+$ apt-man list
 Detected APT sources:
 --------------------------------------
 [01] 3rd Party / PPA      https://packages.microsoft.com/...
@@ -349,7 +380,7 @@ Detected APT sources:
 @section Example 2: Viewing Source Keys
 
 @example
-$ apt-man --list --keys
+$ apt-man list --keys
 APT sources with their signing keys:
 --------------------------------------
 [01] 3rd Party / PPA      https://packages.microsoft.com/...
@@ -362,21 +393,21 @@ APT sources with their signing keys:
 @section Example 3: Temporarily Disabling a PPA
 
 @example
-$ apt-man --list
+$ apt-man list
 [02] 3rd Party / PPA      https://ppa.launchpad.net/...
 
-$ apt-man --disable 2
+$ apt-man disable 2
 Disabling source: /etc/apt/sources.list.d/ppa.sources
 Source disabled. Run 'sudo apt update' to apply changes.
 
-$ apt-man --list
+$ apt-man list
 [02] 3rd Party / PPA      [disabled] https://ppa.launchpad.net/...
 @end example
 
 @section Example 4: Checking for Key Problems
 
 @example
-$ apt-man --check-keys
+$ apt-man keys --check
 Checking for missing or problematic keys...
 --------------------------------------
 [OK] NEW (apt keyring): https://packages.microsoft.com/...
@@ -392,7 +423,7 @@ Found issues with one or more keys.
 @section Example 5: Upgrading Ubuntu Release
 
 @example
-$ apt-man --upgrade-source noble oracular
+$ apt-man upgrade-source noble oracular
 Upgrading all APT sources from noble to oracular ...
 Upgrade complete. You may now run: sudo apt update
 

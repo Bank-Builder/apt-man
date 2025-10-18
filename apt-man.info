@@ -84,13 +84,16 @@ Copy ‘apt-man.sh’ to a directory in your PATH:
 ===============
 
 List all sources:
-     apt-man --list
+     apt-man list
 
    List sources with their signing keys:
-     apt-man --list --keys
+     apt-man list --keys
+
+   Run comprehensive security audit:
+     apt-man lint
 
    Check for key problems:
-     apt-man --check-keys
+     apt-man keys --check
 
 
 File: apt-man.info,  Node: Source Management,  Next: Key Management,  Prev: Getting Started,  Up: Top
@@ -101,7 +104,7 @@ File: apt-man.info,  Node: Source Management,  Next: Key Management,  Prev: Gett
 3.1 Listing Sources
 ===================
 
- -- Command: --list [--keys]
+ -- Command: list [--keys]
      List all APT sources, including both active and disabled ones.
      Sources are numbered for easy reference in other commands.  If
      ‘--keys’ is specified, also shows the GPG signing key for each
@@ -113,34 +116,34 @@ File: apt-man.info,  Node: Source Management,  Next: Key Management,  Prev: Gett
 3.2 Enabling and Disabling Sources
 ==================================
 
- -- Command: --disable ID
+ -- Command: disable ID
      Disable a source by renaming it with a ‘.disabled’ extension.  The
      source remains on the system but is not used by APT. This is safer
      than deleting sources as they can be easily re-enabled.
 
      Cannot be used on the main ‘/etc/apt/sources.list’ file.
 
- -- Command: --enable ID
+ -- Command: enable ID
      Enable a previously disabled source by removing the ‘.disabled’
      extension.  The source becomes active immediately but requires ‘apt
      update’ to refresh package lists.
 
- -- Command: --list-disabled
+ -- Command: list-disabled
      Show only disabled sources.  This is useful for reviewing what
      sources are available but not currently active.
 
 3.3 Package Operations
 ======================
 
- -- Command: --show ID
+ -- Command: show ID
      Show all packages available in the source identified by ID.  This
      queries the repository's package index directly.
 
- -- Command: --installed ID
+ -- Command: installed ID
      Show all packages currently installed on your system that came from
      the source identified by ID.
 
- -- Command: --remove ID
+ -- Command: remove ID
      Remove all packages installed from the source identified by ID.
      This is useful before removing a third-party repository to avoid
      leaving orphaned packages.
@@ -148,16 +151,39 @@ File: apt-man.info,  Node: Source Management,  Next: Key Management,  Prev: Gett
      *Warning:* This operation removes packages without confirmation.
      Use with caution.
 
-3.4 Upgrading Sources
+3.4 Security Audit
+==================
+
+ -- Command: lint
+     Run comprehensive security audit of all sources and keys.  Performs
+     17 different checks including:
+        • Deprecated keyring files
+        • Legacy .list file formats
+        • Sources without explicit keys
+        • Missing or unreadable key files
+        • Keys in legacy locations
+        • Expired or expiring keys
+        • HTTP sources (should use HTTPS)
+        • Weak key algorithms
+        • Duplicate sources
+        • Unreachable URLs
+        • End-of-Life releases
+        • File permissions and ownership
+        • Missing security repositories
+        • Development/testing repositories
+        • Unnecessary deb-src entries
+        • Architecture mismatches
+
+3.5 Upgrading Sources
 =====================
 
- -- Command: --upgrade-source OLD NEW
+ -- Command: upgrade-source OLD NEW
      Upgrade all APT sources from OLD release codename to NEW release
      codename.  This modifies all source files to reference the new
      release.
 
      For example, to upgrade from Ubuntu Noble to Oracular:
-          apt-man --upgrade-source noble oracular
+          apt-man upgrade-source noble oracular
 
      After upgrading sources, run:
           sudo apt update
@@ -172,15 +198,16 @@ File: apt-man.info,  Node: Key Management,  Next: Key Formats,  Prev: Source Man
 4.1 Listing Keys
 ================
 
- -- Command: --keys
+ -- Command: keys [--list]
      List all GPG keys on the system used for package verification.
      Keys are categorized by their format and location, helping identify
-     outdated key storage methods.
+     outdated key storage methods.  This is the default action when
+     using ‘keys’ without any options.
 
 4.2 Checking Keys
 =================
 
- -- Command: --check-keys
+ -- Command: keys --check
      Validate all sources for missing or problematic GPG keys.  This
      command checks:
 
@@ -194,7 +221,7 @@ File: apt-man.info,  Node: Key Management,  Next: Key Formats,  Prev: Source Man
 4.3 Refreshing Keys
 ===================
 
- -- Command: --refresh-keys
+ -- Command: keys --refresh
      Refresh GPG keys from keyservers to get updates, revocations, or
      new signatures.  This only affects keys in ‘/etc/apt/keyrings/’.
 
@@ -204,7 +231,7 @@ File: apt-man.info,  Node: Key Management,  Next: Key Formats,  Prev: Source Man
 4.4 Key Information
 ===================
 
- -- Command: --key-info KEYFILE
+ -- Command: keys --info KEYFILE
      Show detailed information about a specific GPG key file, including:
 
         • Key ID
@@ -215,7 +242,7 @@ File: apt-man.info,  Node: Key Management,  Next: Key Formats,  Prev: Source Man
         • Key UIDs (identities)
 
      Example:
-          apt-man --key-info /etc/apt/keyrings/microsoft.gpg
+          apt-man keys --info /etc/apt/keyrings/microsoft.gpg
 
 
 File: apt-man.info,  Node: Key Formats,  Next: Source Formats,  Prev: Key Management,  Up: Top
@@ -313,7 +340,7 @@ File: apt-man.info,  Node: Examples,  Next: Security,  Prev: Source Formats,  Up
 7.1 Example 1: Listing All Sources
 ==================================
 
-     $ apt-man --list
+     $ apt-man list
      Detected APT sources:
      --------------------------------------
      [01] 3rd Party / PPA      https://packages.microsoft.com/...
@@ -325,7 +352,7 @@ File: apt-man.info,  Node: Examples,  Next: Security,  Prev: Source Formats,  Up
 7.2 Example 2: Viewing Source Keys
 ==================================
 
-     $ apt-man --list --keys
+     $ apt-man list --keys
      APT sources with their signing keys:
      --------------------------------------
      [01] 3rd Party / PPA      https://packages.microsoft.com/...
@@ -337,20 +364,20 @@ File: apt-man.info,  Node: Examples,  Next: Security,  Prev: Source Formats,  Up
 7.3 Example 3: Temporarily Disabling a PPA
 ==========================================
 
-     $ apt-man --list
+     $ apt-man list
      [02] 3rd Party / PPA      https://ppa.launchpad.net/...
 
-     $ apt-man --disable 2
+     $ apt-man disable 2
      Disabling source: /etc/apt/sources.list.d/ppa.sources
      Source disabled. Run 'sudo apt update' to apply changes.
 
-     $ apt-man --list
+     $ apt-man list
      [02] 3rd Party / PPA      [disabled] https://ppa.launchpad.net/...
 
 7.4 Example 4: Checking for Key Problems
 ========================================
 
-     $ apt-man --check-keys
+     $ apt-man keys --check
      Checking for missing or problematic keys...
      --------------------------------------
      [OK] NEW (apt keyring): https://packages.microsoft.com/...
@@ -365,7 +392,7 @@ File: apt-man.info,  Node: Examples,  Next: Security,  Prev: Source Formats,  Up
 7.5 Example 5: Upgrading Ubuntu Release
 =======================================
 
-     $ apt-man --upgrade-source noble oracular
+     $ apt-man upgrade-source noble oracular
      Upgrading all APT sources from noble to oracular ...
      Upgrade complete. You may now run: sudo apt update
 
@@ -465,14 +492,14 @@ Tag Table:
 Node: Top445
 Node: Introduction1506
 Node: Getting Started2356
-Node: Source Management2868
-Node: Key Management5227
-Node: Key Formats6755
-Node: Source Formats8380
-Node: Examples9395
-Node: Security11780
-Node: Files13247
-Node: Index14159
+Node: Source Management2920
+Node: Key Management6037
+Node: Key Formats7650
+Node: Source Formats9275
+Node: Examples10290
+Node: Security12663
+Node: Files14130
+Node: Index15042
 
 End Tag Table
 

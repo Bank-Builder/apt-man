@@ -63,68 +63,75 @@ sudo make install-info
 
 List all sources:
 ```bash
-apt-man --list
+apt-man list
 ```
 
 List sources with their GPG keys:
 ```bash
-apt-man --list --keys
+apt-man list --keys
 ```
 
-Check for key problems:
+Run comprehensive security audit:
 ```bash
-apt-man --check-keys
+apt-man lint
 ```
 
-Disable a source (by ID from --list):
+Disable a source (by ID from list):
 ```bash
-apt-man --disable 5
+apt-man disable 5
 ```
 
 Enable a disabled source:
 ```bash
-apt-man --enable 5
+apt-man enable 5
 ```
 
 ### Key Management
 
 List all GPG keys:
 ```bash
-apt-man --keys
+apt-man keys
+# or
+apt-man keys --list
+```
+
+Check for key problems:
+```bash
+apt-man keys --check
 ```
 
 Show detailed key information:
 ```bash
-apt-man --key-info /etc/apt/keyrings/microsoft.gpg
+apt-man keys --info /etc/apt/keyrings/microsoft.gpg
 ```
 
 Refresh keys from keyservers:
 ```bash
-apt-man --refresh-keys
+apt-man keys --refresh
 ```
 
 ### Package Operations
 
 Show packages in a source:
 ```bash
-apt-man --show 3
+apt-man show 3
 ```
 
 Show installed packages from a source:
 ```bash
-apt-man --installed 3
+apt-man installed 3
 ```
 
 Remove all packages from a source:
 ```bash
-apt-man --remove 3
+apt-man remove 3
 ```
 
 ### Release Upgrade
 
 Upgrade all sources to a new Ubuntu release:
 ```bash
-apt-man --upgrade-source noble oracular
+apt-man upgrade-source noble oracular
 sudo apt update
 sudo apt dist-upgrade
 ```
@@ -208,30 +215,33 @@ sudo make uninstall
 ### Example 1: Audit All Sources and Keys
 
 ```bash
+# Run comprehensive security audit
+apt-man lint
+
 # List all sources with their keys
-apt-man --list --keys
+apt-man list --keys
 
 # Check for any problems
-apt-man --check-keys
+apt-man keys --check
 
 # Review key details
-apt-man --key-info /etc/apt/keyrings/example.gpg
+apt-man keys --info /etc/apt/keyrings/example.gpg
 ```
 
 ### Example 2: Temporarily Disable a PPA
 
 ```bash
 # List sources to find ID
-apt-man --list
+apt-man list
 
 # Disable the PPA
-apt-man --disable 7
+apt-man disable 7
 
 # Update APT
 sudo apt update
 
 # Later, re-enable it
-apt-man --enable 7
+apt-man enable 7
 sudo apt update
 ```
 
@@ -239,13 +249,13 @@ sudo apt update
 
 ```bash
 # Show what's installed from the source
-apt-man --installed 4
+apt-man installed 4
 
 # Remove all packages from that source
-apt-man --remove 4
+apt-man remove 4
 
 # Disable the source
-apt-man --disable 4
+apt-man disable 4
 
 # Remove the source file manually if needed
 ```

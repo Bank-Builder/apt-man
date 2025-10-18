@@ -3,7 +3,7 @@
 apt-man \- manage APT sources, PPAs, and GPG keys with ease
 .SH SYNOPSIS
 .B apt-man
-[\fIOPTION\fR] [\fIARGS\fR]
+[\fICOMMAND\fR] [\fIOPTIONS\fR] [\fIARGS\fR]
 .SH DESCRIPTION
 .B apt-man
 is a comprehensive tool for managing APT package sources, including Ubuntu PPAs,
@@ -14,57 +14,64 @@ The tool provides functionality to list, enable, disable, and upgrade sources,
 as well as manage their associated GPG keys. It helps identify security issues
 like missing keys or outdated key formats.
 
-.SH OPTIONS
-.SS "Source Management"
+.SH COMMANDS
+.SS "Source Management Commands"
 .TP
-.B \-\-list [\-\-keys]
+.B list [\-\-keys]
 List all APT sources. If \fB\-\-keys\fR is specified, also show the GPG signing
 key associated with each source.
 .TP
-.B \-\-show \fIID\fR
+.B show \fIID\fR
 Show all available packages in the source identified by \fIID\fR.
 .TP
-.B \-\-installed \fIID\fR
+.B installed \fIID\fR
 Show all installed packages from the source identified by \fIID\fR.
 .TP
-.B \-\-remove \fIID\fR
+.B remove \fIID\fR
 Remove all packages installed from the source identified by \fIID\fR.
 .TP
-.B \-\-disable \fIID\fR
+.B disable \fIID\fR
 Disable a source by renaming it with a .disabled extension. The source will
 no longer be used by APT but can be re-enabled later.
 .TP
-.B \-\-enable \fIID\fR
+.B enable \fIID\fR
 Enable a previously disabled source by removing the .disabled extension.
 .TP
-.B \-\-list\-disabled
+.B list-disabled
 List all disabled sources.
 .TP
-.B \-\-upgrade\-source \fIOLD\fR \fINEW\fR
+.B upgrade-source \fIOLD\fR \fINEW\fR
 Upgrade all APT sources from OLD release codename to NEW release codename.
 For example, to upgrade from "noble" to "oracular".
+.TP
+.B lint
+Comprehensive security audit of all sources and keys. Performs 17 different
+security checks including key validation, source configuration, and file permissions.
 
-.SS "Key Management"
+.SS "Key Management Commands"
 .TP
-.B \-\-keys
+.B keys [\-\-list]
 List all GPG keys on the system, showing their format (old vs new) and location.
+This is the default action when no option is specified.
 .TP
-.B \-\-check\-keys
+.B keys \-\-check
 Check all sources for missing or problematic GPG keys. Reports missing key files,
 unreadable keys, and sources without keys (security risk).
 .TP
-.B \-\-refresh\-keys
+.B keys \-\-refresh
 Refresh GPG keys from keyservers to get updates, revocations, or new signatures.
 Only affects keys in /etc/apt/keyrings/. System keyrings are updated via APT packages.
 .TP
-.B \-\-key\-info \fIKEYFILE\fR
+.B keys \-\-info \fIKEYFILE\fR
 Show detailed information about a specific GPG key file, including key ID,
 algorithm, creation date, expiration date, and status.
+
+.SS "General Options"
 .TP
-.B \-\-help
+.B \-\-help, \-h
 Display help message and exit.
 .TP
-.B \-\-version
+.B \-\-version, \-V
 Display version information and exit.
 
 .SH KEY FORMATS
@@ -107,28 +114,31 @@ via Signed-By field and inline PGP keys.
 
 .SH EXAMPLES
 .TP
-.B apt-man \-\-list
+.B apt-man list
 List all active and disabled sources.
 .TP
-.B apt-man \-\-list \-\-keys
+.B apt-man list \-\-keys
 List all sources with their GPG signing keys.
 .TP
-.B apt-man \-\-disable 5
+.B apt-man disable 5
 Disable the source with ID 5.
 .TP
-.B apt-man \-\-check\-keys
+.B apt-man lint
+Run comprehensive security audit with 17 checks.
+.TP
+.B apt-man keys \-\-check
 Check all sources for missing or problematic keys.
 .TP
-.B apt-man \-\-key\-info /etc/apt/keyrings/microsoft.gpg
+.B apt-man keys \-\-info /etc/apt/keyrings/microsoft.gpg
 Show detailed information about the Microsoft key.
 .TP
-.B apt-man \-\-upgrade\-source noble oracular
+.B apt-man upgrade-source noble oracular
 Upgrade all sources from Ubuntu Noble to Oracular.
 .TP
-.B apt-man \-\-installed 3
+.B apt-man installed 3
 Show all installed packages from source ID 3.
 .TP
-.B apt-man \-\-remove 4
+.B apt-man remove 4
 Remove all packages installed from source ID 4.
 
 .SH FILES
