@@ -291,13 +291,13 @@ show_installed() {
         echo "Trying alternative method..."
         
         # Fallback to old method if repository structure is different
-        local total_pkgs=$(dpkg-query -W | wc -l)
+        local total_pkgs=$(apt list --installed 2>/dev/null | wc -l)
         local checked=0
         local found_packages=0
         
         echo "Checking $total_pkgs packages... (this may take a moment)"
         
-    for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
+    for pkg in $(apt list --installed 2>/dev/null | awk -F'/' '{print $1}' | tail -n +2); do
             checked=$((checked + 1))
             
             # Show progress every 100 packages
@@ -380,7 +380,7 @@ remove_packages() {
         echo ""
     else
         # Get total package count to estimate time
-        local total_pkgs=$(dpkg-query -W | wc -l)
+        local total_pkgs=$(apt list --installed 2>/dev/null | wc -l)
         echo "Note: Your system has $total_pkgs packages installed total."
         echo "      Searching through all of them to find packages from this source"
         echo "      may take 1-2 minutes on systems with many packages."
@@ -395,7 +395,7 @@ remove_packages() {
             local checked=0
             local last_percent=-1
             
-    for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
+    for pkg in $(apt list --installed 2>/dev/null | awk -F'/' '{print $1}' | tail -n +2); do
                 checked=$((checked + 1))
                 local percent=$((checked * 100 / total_pkgs))
                 

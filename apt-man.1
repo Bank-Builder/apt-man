@@ -8,7 +8,7 @@ apt-man \- manage APT sources, PPAs, and GPG keys with ease
 .B apt-man
 is a comprehensive tool for managing APT package sources, including Ubuntu PPAs,
 third-party repositories, and their GPG signing keys. It supports both legacy
-.list format and modern DEB822 .sources format.
+\&.list format and modern DEB822 \&.sources format.
 
 The tool provides functionality to list, enable, disable, and upgrade sources,
 as well as manage their associated GPG keys. It helps identify security issues
@@ -105,7 +105,7 @@ disable/remove) and reverts them in the correct order.
 .SS "Security Fix Commands"
 .TP
 .B migrate \fIID\fR
-Convert a legacy .list file to modern .sources (DEB822) format. Currently shows
+Convert a legacy \&.list file to modern \&.sources (DEB822) format. Currently shows
 manual steps for migration.
 .TP
 .B use-https \fIID\fR
@@ -178,7 +178,7 @@ from keyservers.
 supports both APT source formats:
 
 .TP
-.B ".list files"
+.B "\&.list files"
 Legacy one-line-per-source format. Keys are implicitly trusted from the
 default keyring.
 .TP
@@ -234,7 +234,7 @@ List all available backups from previous lint --fix sessions.
 Revert the most recent lint --fix changes.
 .TP
 .B apt-man migrate 3
-Convert source ID 3 from .list to .sources format.
+Convert source ID 3 from \&.list to \&.sources format.
 .TP
 .B apt-man use-https 7
 Convert source ID 7 from HTTP to HTTPS.
@@ -265,13 +265,13 @@ Remove all packages installed from source ID 4.
 .I /etc/apt/sources.list
 Main APT sources file (may not exist on modern systems).
 .TP
-.I /etc/apt/sources.list.d/*.list
+.I /etc/apt/sources.list.d/*\&.list
 Legacy format source files.
 .TP
 .I /etc/apt/sources.list.d/*.sources
 Modern DEB822 format source files.
 .TP
-.I /etc/apt/sources.list.d/*.disabled
+.I /etc/apt/sources.list.d/*\&.disabled
 Disabled source files (both formats).
 .TP
 .I /etc/apt/trusted.gpg
