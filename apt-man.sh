@@ -980,6 +980,56 @@ lint_sources() {
         checks_passed=$((checks_passed + 1))
     fi
     
+    # Check 13: File permissions and ownership
+    echo "[CHECK 13] Source file permissions and ownership"
+    local perm_issues=0
+    
+    for file in "$SOURCES_DIR"/*.list "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        
+        # Check ownership
+        local owner=$(stat -c '%U:%G' "$file" 2>/dev/null)
+        if [[ "$owner" != "root:root" ]]; then
+            echo "  [FAIL] Incorrect ownership: $file"
+            echo "         Owner: $owner (should be root:root)"
+            perm_issues=$((perm_issues + 1))
+        fi
+        
+        # Check if world-writable
+        if [[ -w "$file" ]] && [[ $(stat -c '%a' "$file") =~ ^.{2}[2367]$ ]]; then
+            echo "  [FAIL] World-writable file: $file"
+            echo "         Permissions: $(stat -c '%a' "$file")"
+            perm_issues=$((perm_issues + 1))
+        fi
+        
+        # Check if executable
+        if [[ -x "$file" ]]; then
+            echo "  [WARN] Executable source file: $file"
+            echo "         Permissions: $(stat -c '%a' "$file")"
+            echo "         Source files should not be executable"
+            perm_issues=$((perm_issues + 1))
+        fi
+        
+        # Check if it's a symlink (potential attack vector)
+        if [[ -L "$file" ]]; then
+            local target=$(readlink -f "$file")
+            echo "  [WARN] Symlink detected: $file -> $target"
+            echo "         Recommendation: Use regular files instead of symlinks"
+            perm_issues=$((perm_issues + 1))
+        fi
+    done
+    
+    if [[ $perm_issues -gt 0 ]]; then
+        echo "         Found $perm_issues permission/ownership issue(s)"
+        echo "         Recommendation: Fix with: sudo chown root:root FILE && sudo chmod 644 FILE"
+        echo ""
+        issues_found=$((issues_found + 1))
+    else
+        echo "  [PASS] All source files have correct permissions"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
     # Summary
     echo "============================================"
     echo "LINT SUMMARY"
