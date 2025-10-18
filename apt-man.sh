@@ -925,6 +925,61 @@ lint_sources() {
         checks_passed=$((checks_passed + 1))
     fi
     
+    # Check 12: EOL (End-of-Life) Ubuntu releases
+    echo "[CHECK 12] End-of-Life Ubuntu releases (no security updates)"
+    local eol_count=0
+    
+    # List of EOL Ubuntu releases (as of 2025)
+    local eol_releases="bionic|cosmic|disco|eoan|groovy|hirsute|impish|kinetic|lunar|mantic"
+    
+    for file in "$SOURCES_DIR"/*.list; do
+        [[ -f "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        while read -r line; do
+            [[ "$line" =~ ^deb ]] || continue
+            # Check if line contains any EOL release
+            if [[ "$line" =~ ($eol_releases) ]]; then
+                local release="${BASH_REMATCH[1]}"
+                echo "  [FAIL] EOL release detected: $release"
+                echo "         File: $file"
+                echo "         Line: $line"
+                eol_count=$((eol_count + 1))
+            fi
+        done < "$file"
+    done
+    
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        
+        # Check Suites field for EOL releases
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^Suites:[[:space:]]*(.+)$ ]]; then
+                local suites="${BASH_REMATCH[1]}"
+                if [[ "$suites" =~ ($eol_releases) ]]; then
+                    local release="${BASH_REMATCH[1]}"
+                    echo "  [FAIL] EOL release detected: $release"
+                    echo "         File: $file"
+                    echo "         Suites: $suites"
+                    eol_count=$((eol_count + 1))
+                fi
+            fi
+        done < "$file"
+    done
+    
+    if [[ $eol_count -gt 0 ]]; then
+        echo "         Found $eol_count EOL release(s)"
+        echo "         Recommendation: Upgrade to a supported Ubuntu release immediately"
+        echo "         EOL releases receive NO security updates"
+        echo ""
+        issues_found=$((issues_found + 1))
+    else
+        echo "  [PASS] No EOL releases detected"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
     # Summary
     echo "============================================"
     echo "LINT SUMMARY"
