@@ -37,6 +37,34 @@ parse_deb822() {
     done < "$file"
 }
 
+# Parse DEB822 format as stanzas (URI|KEY pairs)
+parse_deb822_stanzas() {
+    local file="$1"
+    local current_uri=""
+    local current_key=""
+    
+    while IFS= read -r line; do
+        # Empty line means end of stanza
+        if [[ -z "$line" || "$line" =~ ^[[:space:]]*$ ]]; then
+            if [[ -n "$current_uri" ]]; then
+                echo "$current_uri|${current_key:-none}"
+                current_uri=""
+                current_key=""
+            fi
+        elif [[ "$line" =~ ^URIs:[[:space:]]*(.+)$ ]]; then
+            current_uri="${BASH_REMATCH[1]}"
+            current_uri="${current_uri%/}"
+        elif [[ "$line" =~ ^Signed-By:[[:space:]]*(.+)$ ]]; then
+            current_key="${BASH_REMATCH[1]}"
+        fi
+    done < "$file"
+    
+    # Handle last stanza if file doesn't end with empty line
+    if [[ -n "$current_uri" ]]; then
+        echo "$current_uri|${current_key:-none}"
+    fi
+}
+
 # Extract Signed-By field from DEB822 format
 parse_deb822_keys() {
     local file="$1"
@@ -320,32 +348,20 @@ list_sources_with_keys() {
         [[ -f "$file" ]] || continue
         [[ -s "$file" ]] || continue
         
-        # Get URIs and Signed-By from the same file
-        local urls=()
-        local keys=()
-        
-        while IFS= read -r url; do
-            [[ -n "$url" ]] && urls+=("$url")
-        done < <(parse_deb822 "$file")
-        
-        while IFS= read -r key; do
-            [[ -n "$key" ]] && keys+=("$key")
-        done < <(parse_deb822_keys "$file")
-        
-        # Display each URL with its key
-        for url in "${urls[@]}"; do
+        # Parse stanzas to get URI|KEY pairs
+        while IFS='|' read -r url key; do
+            [[ -n "$url" ]] || continue
             label=$(classify_source "$url")
             printf "[%02d] %-30s %-40s\n" "$i" "$label" "$url"
-            if [[ ${#keys[@]} -gt 0 ]]; then
-                for key in "${keys[@]}"; do
-                    local key_format=$(classify_key "$key")
-                    printf "     Key: %-25s %s\n" "$key_format" "$key"
-                done
-            else
+            
+            if [[ "$key" == "none" ]]; then
                 echo "     Key: None specified (uses default)"
+            else
+                local key_format=$(classify_key "$key")
+                printf "     Key: %-25s %s\n" "$key_format" "$key"
             fi
             ((i++))
-        done
+        done < <(parse_deb822_stanzas "$file")
     done
     
     # Process disabled old-style .list files
@@ -366,30 +382,20 @@ list_sources_with_keys() {
         [[ -f "$file" ]] || continue
         [[ -s "$file" ]] || continue
         
-        local urls=()
-        local keys=()
-        
-        while IFS= read -r url; do
-            [[ -n "$url" ]] && urls+=("$url")
-        done < <(parse_deb822 "$file")
-        
-        while IFS= read -r key; do
-            [[ -n "$key" ]] && keys+=("$key")
-        done < <(parse_deb822_keys "$file")
-        
-        for url in "${urls[@]}"; do
+        # Parse stanzas to get URI|KEY pairs
+        while IFS='|' read -r url key; do
+            [[ -n "$url" ]] || continue
             label=$(classify_source "$url")
             printf "[%02d] %-30s [disabled] %-40s\n" "$i" "$label" "$url"
-            if [[ ${#keys[@]} -gt 0 ]]; then
-                for key in "${keys[@]}"; do
-                    local key_format=$(classify_key "$key")
-                    printf "     Key: %-25s %s\n" "$key_format" "$key"
-                done
-            else
+            
+            if [[ "$key" == "none" ]]; then
                 echo "     Key: None specified (uses default)"
+            else
+                local key_format=$(classify_key "$key")
+                printf "     Key: %-25s %s\n" "$key_format" "$key"
             fi
             ((i++))
-        done
+        done < <(parse_deb822_stanzas "$file")
     done
     
     echo "--------------------------------------"
