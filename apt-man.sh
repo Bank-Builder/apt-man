@@ -1,0 +1,272 @@
+#!/usr/bin/env bash
+# APT Manager – manage PPAs and repositories with ease
+
+set -euo pipefail
+
+SOURCES_DIR="/etc/apt/sources.list.d"
+MAIN_LIST="/etc/apt/sources.list"
+
+# Detect Ubuntu release codename
+CODENAME=$(lsb_release -sc)
+
+# Helper: classify a source
+classify_source() {
+    local url="$1"
+    if [[ "$url" =~ (archive\.ubuntu\.com|security\.ubuntu\.com|ports\.ubuntu\.com) ]]; then
+        echo "Ubuntu Official"
+    elif [[ "$url" =~ (partner\.archive\.canonical\.com) ]]; then
+        echo "Canonical Partner"
+    else
+        echo "3rd Party / PPA"
+    fi
+}
+
+# Parse DEB822 format (.sources files)
+parse_deb822() {
+    local file="$1"
+    local current_uri=""
+    
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^URIs:[[:space:]]*(.+)$ ]]; then
+            current_uri="${BASH_REMATCH[1]}"
+            current_uri="${current_uri%/}"
+            if [[ -n "$current_uri" ]]; then
+                echo "$current_uri"
+            fi
+        fi
+    done < "$file"
+}
+
+# 1. List all sources
+list_sources() {
+    echo "Detected APT sources:"
+    echo "--------------------------------------"
+    local i=1
+    
+    # Process old-style .list files
+    for file in "$MAIN_LIST" "$SOURCES_DIR"/*.list; do
+        [[ -f "$file" ]] || continue
+        while read -r line; do
+            [[ "$line" =~ ^deb ]] || continue
+            url=$(echo "$line" | awk '{print $2}')
+            label=$(classify_source "$url")
+            printf "[%02d] %-30s %-40s\n" "$i" "$label" "$url"
+            echo "$i|$file|$url" >> /tmp/sources_index
+            ((i++))
+        done < "$file"
+    done
+    
+    # Process new-style .sources files (DEB822 format)
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        while IFS= read -r url; do
+            [[ -n "$url" ]] || continue
+            label=$(classify_source "$url")
+            printf "[%02d] %-30s %-40s\n" "$i" "$label" "$url"
+            echo "$i|$file|$url" >> /tmp/sources_index
+            ((i++))
+        done < <(parse_deb822 "$file")
+    done
+    
+    # Process disabled old-style .list files
+    for file in "$SOURCES_DIR"/*.list.disabled; do
+        [[ -f "$file" ]] || continue
+        while read -r line; do
+            [[ "$line" =~ ^deb ]] || continue
+            url=$(echo "$line" | awk '{print $2}')
+            label=$(classify_source "$url")
+            printf "[%02d] %-30s [disabled] %-40s\n" "$i" "$label" "$url"
+            echo "$i|$file|$url" >> /tmp/sources_index
+            ((i++))
+        done < "$file"
+    done
+    
+    # Process disabled new-style .sources files
+    for file in "$SOURCES_DIR"/*.sources.disabled; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        while IFS= read -r url; do
+            [[ -n "$url" ]] || continue
+            label=$(classify_source "$url")
+            printf "[%02d] %-30s [disabled] %-40s\n" "$i" "$label" "$url"
+            echo "$i|$file|$url" >> /tmp/sources_index
+            ((i++))
+        done < <(parse_deb822 "$file")
+    done
+    
+    echo "--------------------------------------"
+}
+
+# 2. Show packages in a source
+show_packages() {
+    local id="$1"
+    local url
+    url=$(grep "^$id|" /tmp/sources_index | cut -d'|' -f3)
+    echo "Packages in $url:"
+    echo "--------------------------------------"
+    curl -s "${url}/dists/${CODENAME}/main/binary-amd64/Packages" \
+        | grep -E '^Package: ' | awk '{print $2}'
+}
+
+# 3. Show installed packages from a source
+show_installed() {
+    local id="$1"
+    local url
+    url=$(grep "^$id|" /tmp/sources_index | cut -d'|' -f3)
+    echo "Installed packages from $url:"
+    echo "--------------------------------------"
+    for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
+        if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
+            echo "$pkg"
+        fi
+    done
+}
+
+# 4. Remove all installed packages from a 3rd-party source
+remove_packages() {
+    local id="$1"
+    local url
+    url=$(grep "^$id|" /tmp/sources_index | cut -d'|' -f3)
+    echo "Removing all packages installed from $url..."
+    for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
+        if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
+            sudo apt-get remove -y "$pkg"
+        fi
+    done
+}
+
+# 5. Upgrade all sources to a new codename
+upgrade_sources() {
+    local old="$1"
+    local new="$2"
+    echo "Upgrading all APT sources from $old to $new ..."
+    
+    # Handle old-style .list files
+    if [[ -f "$MAIN_LIST" ]]; then
+        sudo sed -i "s|$old|$new|g" "$MAIN_LIST"
+    fi
+    for file in "$SOURCES_DIR"/*.list; do
+        [[ -f "$file" ]] || continue
+        sudo sed -i "s|$old|$new|g" "$file"
+    done
+    
+    # Handle new-style .sources files
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        sudo sed -i "s|$old|$new|g" "$file"
+    done
+    
+    echo "Upgrade complete. You may now run: sudo apt update"
+}
+
+# 6. Disable a source by renaming it
+disable_source() {
+    local id="$1"
+    local file
+    file=$(grep "^$id|" /tmp/sources_index | cut -d'|' -f2)
+    
+    if [[ -z "$file" || ! -f "$file" ]]; then
+        echo "Error: Source ID $id not found"
+        return 1
+    fi
+    
+    if [[ "$file" == "$MAIN_LIST" ]]; then
+        echo "Error: Cannot disable the main sources.list file"
+        return 1
+    fi
+    
+    if [[ "$file" =~ \.disabled$ ]]; then
+        echo "Source is already disabled: $file"
+        return 0
+    fi
+    
+    echo "Disabling source: $file"
+    sudo mv "$file" "$file.disabled"
+    echo "Source disabled. Run 'sudo apt update' to apply changes."
+}
+
+# 7. Enable a source by removing .disabled extension
+enable_source() {
+    local id="$1"
+    local file
+    file=$(grep "^$id|" /tmp/sources_index | cut -d'|' -f2)
+    
+    if [[ -z "$file" || ! -f "$file" ]]; then
+        echo "Error: Source ID $id not found"
+        return 1
+    fi
+    
+    if [[ ! "$file" =~ \.disabled$ ]]; then
+        echo "Source is already enabled: $file"
+        return 0
+    fi
+    
+    local newfile="${file%.disabled}"
+    echo "Enabling source: $file -> $newfile"
+    sudo mv "$file" "$newfile"
+    echo "Source enabled. Run 'sudo apt update' to apply changes."
+}
+
+# 8. List disabled sources
+list_disabled() {
+    echo "Disabled APT sources:"
+    echo "--------------------------------------"
+    local i=1
+    local found=0
+    
+    for file in "$SOURCES_DIR"/*.list.disabled "$SOURCES_DIR"/*.sources.disabled; do
+        [[ -f "$file" ]] || continue
+        found=1
+        printf "[%02d] %s\n" "$i" "$(basename "$file")"
+        ((i++))
+    done
+    
+    if [[ $found -eq 0 ]]; then
+        echo "No disabled sources found."
+    fi
+    echo "--------------------------------------"
+}
+
+# CLI entry
+case "${1:-}" in
+    --list)
+        rm -f /tmp/sources_index
+        list_sources
+        ;;
+    --show)
+        [[ $# -eq 2 ]] || { echo "Usage: $0 --show <id>"; exit 1; }
+        show_packages "$2"
+        ;;
+    --installed)
+        [[ $# -eq 2 ]] || { echo "Usage: $0 --installed <id>"; exit 1; }
+        show_installed "$2"
+        ;;
+    --remove)
+        [[ $# -eq 2 ]] || { echo "Usage: $0 --remove <id>"; exit 1; }
+        remove_packages "$2"
+        ;;
+    --upgrade-source)
+        [[ $# -eq 3 ]] || { echo "Usage: $0 --upgrade-source <old> <new>"; exit 1; }
+        upgrade_sources "$2" "$3"
+        ;;
+    --disable)
+        [[ $# -eq 2 ]] || { echo "Usage: $0 --disable <id>"; exit 1; }
+        rm -f /tmp/sources_index
+        list_sources > /dev/null
+        disable_source "$2"
+        ;;
+    --enable)
+        [[ $# -eq 2 ]] || { echo "Usage: $0 --enable <id>"; exit 1; }
+        rm -f /tmp/sources_index
+        list_sources > /dev/null
+        enable_source "$2"
+        ;;
+    --list-disabled)
+        list_disabled
+        ;;
+    *)
+        echo "Usage: $0 [--list | --show <id> | --installed <id> | --remove <id> | --upgrade-source <old> <new> | --disable <id> | --enable <id> | --list-disabled]"
+        exit 1
+        ;;
+esac
