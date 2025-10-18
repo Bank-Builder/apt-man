@@ -227,27 +227,82 @@ show_installed() {
     echo "Installed packages from $url:"
     echo "--------------------------------------"
     
-    # Get total package count to estimate time
-    local total_pkgs=$(dpkg-query -W | wc -l)
+    # Extract codename from URL if it contains a version number
+    local repo_codename="$CODENAME"
+    if [[ "$url" =~ /ubuntu/([0-9]+\.[0-9]+)/ ]]; then
+        local ubuntu_version="${BASH_REMATCH[1]}"
+        case "$ubuntu_version" in
+            20.04) repo_codename="focal" ;;
+            22.04) repo_codename="jammy" ;;
+            24.04) repo_codename="noble" ;;
+            25.04) repo_codename="plucky" ;;
+            *) repo_codename="$CODENAME" ;;
+        esac
+    fi
+    
+    # Get available packages from the repository
+    local packages_url="${url}/dists/${repo_codename}/main/binary-amd64/Packages"
+    local available_packages=$(curl -s "$packages_url" 2>/dev/null)
+    
+    if [[ ! "$available_packages" =~ ^Package: ]]; then
+        echo "Could not retrieve package list from repository."
+        echo "Trying alternative method..."
+        
+        # Fallback to old method if repository structure is different
+        local total_pkgs=$(dpkg-query -W | wc -l)
+        local checked=0
+        local found_packages=0
+        
+        echo "Checking $total_pkgs packages... (this may take a moment)"
+        
+        for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
+            checked=$((checked + 1))
+            
+            # Show progress every 100 packages
+            if [ $((checked % 100)) -eq 0 ]; then
+                echo -ne "Checked $checked/$total_pkgs packages\r"
+            fi
+            
+            if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
+                echo -ne "\r\033[K"  # Clear progress line
+                echo "$pkg"
+                found_packages=$((found_packages + 1))
+            fi
+        done
+        
+        echo -ne "\r\033[K"  # Clear the progress line
+        
+        if [ $found_packages -eq 0 ]; then
+            echo "No packages installed from this source."
+        fi
+        return
+    fi
+    
+    # Extract package names from repository
+    local package_names=$(echo "$available_packages" | grep -E '^Package: ' | awk '{print $2}' | sort | uniq)
+    local total_available=$(echo "$package_names" | wc -l)
     local checked=0
     local found_packages=0
     
-    echo "Checking $total_pkgs packages... (this may take a moment)"
+    echo "Checking $total_available available packages for installation status..."
     
-    for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
+    # Check each available package to see if it's installed
+    while IFS= read -r pkg; do
+        [[ -z "$pkg" ]] && continue
         checked=$((checked + 1))
         
-        # Show progress every 100 packages
-        if [ $((checked % 100)) -eq 0 ]; then
-            echo -ne "Checked $checked/$total_pkgs packages\r"
+        # Show progress every 10 packages
+        if [ $((checked % 10)) -eq 0 ]; then
+            echo -ne "Checked $checked/$total_available packages\r"
         fi
         
-        if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
+        # Check if package is installed
+        if dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
             echo -ne "\r\033[K"  # Clear progress line
             echo "$pkg"
             found_packages=$((found_packages + 1))
         fi
-    done
+    done <<< "$package_names"
     
     echo -ne "\r\033[K"  # Clear the progress line
     
