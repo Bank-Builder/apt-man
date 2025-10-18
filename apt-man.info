@@ -180,8 +180,9 @@ File: apt-man.info,  Node: Source Management,  Next: Key Management,  Prev: Gett
 
         • Scans for HTTP sources and tests if HTTPS is available before
           converting
-        • Identifies legacy keys in ‘trusted.gpg.d/’ that should be
-          moved
+        • Moves legacy keys from ‘trusted.gpg.d/’ to
+          ‘/etc/apt/keyrings/’
+        • Removes old keys after successful copy (backups saved)
         • Detects unreachable sources and offers to disable or remove
           them
         • Prompts for confirmation before each change
@@ -309,16 +310,18 @@ File: apt-man.info,  Node: Key Management,  Next: Key Formats,  Prev: Source Man
      Move a legacy key from ‘/etc/apt/trusted.gpg.d/’ to the modern
      location ‘/etc/apt/keyrings/’.  This command:
 
+        • Creates a timestamped backup in ‘/tmp/’
         • Validates the key is in the legacy location
         • Creates ‘/etc/apt/keyrings/’ if it doesn't exist
         • Copies the key to the new location
         • Sets appropriate file permissions
+        • Removes the key from the legacy location
         • Provides instructions for updating source files
 
      *Important:* After moving a key, you must update your .sources
      files to explicitly reference the new key location using the
-     ‘Signed-By’ field.  Test with ‘apt update’ before removing the old
-     key file.
+     ‘Signed-By’ field.  Test with ‘apt update’ to ensure everything
+     works.  If there are problems, restore the backup from ‘/tmp/’.
 
      Example:
           apt-man keys --move /etc/apt/trusted.gpg.d/old.gpg
@@ -588,13 +591,13 @@ Node: Top445
 Node: Introduction1506
 Node: Getting Started2356
 Node: Source Management2920
-Node: Key Management8378
-Node: Key Formats11279
-Node: Source Formats12904
-Node: Examples13919
-Node: Security16292
-Node: Files17759
-Node: Index18671
+Node: Key Management8449
+Node: Key Formats11514
+Node: Source Formats13139
+Node: Examples14154
+Node: Security16527
+Node: Files17994
+Node: Index18906
 
 End Tag Table
 

@@ -54,18 +54,19 @@ Interactively fix security warnings found by the audit. This command:
 .IP \(bu 2
 Scans for HTTP sources and tests if HTTPS is available
 .IP \(bu 2
-Identifies legacy keys that should be moved to modern locations
+Moves legacy keys to modern locations (removes old keys after backup)
 .IP \(bu 2
 Detects unreachable sources and offers to disable or remove them
 .IP \(bu 2
 Prompts for confirmation before each change
 .IP \(bu 2
-Creates backups of all modified files
+Creates timestamped backup directory for all modified files
 .IP \(bu 2
 Provides clear instructions for manual steps
 .RE
 .IP
 Changes are applied carefully to avoid breaking your APT configuration.
+All backups are saved in /tmp/apt-man-backup-* for recovery if needed.
 
 .SS "Security Fix Commands"
 .TP
@@ -97,7 +98,9 @@ algorithm, creation date, expiration date, and status.
 .TP
 .B keys \-\-move \fIKEYFILE\fR
 Move a legacy key from /etc/apt/trusted.gpg.d/ to the modern location
-/etc/apt/keyrings/. Provides instructions for updating source files.
+/etc/apt/keyrings/. Creates a backup in /tmp/, copies the key to the new
+location, and removes it from the legacy location. Provides instructions
+for updating source files.
 .TP
 .B keys \-\-renewal
 Show all GPG keys that will expire in the next 90 days, helping plan for

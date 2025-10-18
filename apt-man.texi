@@ -204,7 +204,9 @@ a safe, interactive way to apply fixes:
 @item
 Scans for HTTP sources and tests if HTTPS is available before converting
 @item
-Identifies legacy keys in @file{trusted.gpg.d/} that should be moved
+Moves legacy keys from @file{trusted.gpg.d/} to @file{/etc/apt/keyrings/}
+@item
+Removes old keys after successful copy (backups saved)
 @item
 Detects unreachable sources and offers to disable or remove them
 @item
@@ -360,6 +362,8 @@ Move a legacy key from @file{/etc/apt/trusted.gpg.d/} to the modern location
 
 @itemize @bullet
 @item
+Creates a timestamped backup in @file{/tmp/}
+@item
 Validates the key is in the legacy location
 @item
 Creates @file{/etc/apt/keyrings/} if it doesn't exist
@@ -368,12 +372,15 @@ Copies the key to the new location
 @item
 Sets appropriate file permissions
 @item
+Removes the key from the legacy location
+@item
 Provides instructions for updating source files
 @end itemize
 
 @strong{Important:} After moving a key, you must update your .sources files
 to explicitly reference the new key location using the @code{Signed-By} field.
-Test with @command{apt update} before removing the old key file.
+Test with @command{apt update} to ensure everything works. If there are problems,
+restore the backup from @file{/tmp/}.
 
 Example:
 @example

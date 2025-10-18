@@ -1389,8 +1389,9 @@ lint_fix() {
     if [[ ${#legacy_keys[@]} -gt 0 ]]; then
         echo "Found ${#legacy_keys[@]} legacy key(s) in trusted.gpg.d/"
         echo ""
-        echo "WARNING: Moving keys requires updating .sources files manually."
-        echo "This is a complex operation that should be done carefully."
+        echo "NOTE: Keys will be moved to /etc/apt/keyrings/ and removed from legacy location."
+        echo "IMPORTANT: You must update .sources files to reference the new key location."
+        echo "Backups will be saved in: $backup_dir"
         echo ""
         
         for keyfile in "${legacy_keys[@]}"; do
@@ -1403,18 +1404,31 @@ lint_fix() {
             echo
             
             if [[ $REPLY =~ ^[Yy]$ ]]; then
+                # Backup the key first
+                sudo cp "$keyfile" "$backup_dir/$(basename "$keyfile")"
+                
                 # Create keyrings directory if needed
                 if [[ ! -d "/etc/apt/keyrings" ]]; then
                     sudo mkdir -p /etc/apt/keyrings
                     sudo chmod 755 /etc/apt/keyrings
                 fi
                 
-                # Copy the key
+                # Copy the key and remove old one
                 if sudo cp "$keyfile" "$newfile" 2>/dev/null && sudo chmod 644 "$newfile" 2>/dev/null; then
-                    echo "  SUCCESS: Key copied to $newfile"
-                    echo "  IMPORTANT: Update your .sources files to reference: $newfile"
-                    echo "  Test with 'sudo apt update' before removing: $keyfile"
-                    fixes_applied=$((fixes_applied + 1))
+                    # Remove the legacy key
+                    if sudo rm "$keyfile" 2>/dev/null; then
+                        echo "  SUCCESS: Key moved to $newfile"
+                        echo "  Old key removed from: $keyfile"
+                        echo "  Backup saved in: $backup_dir"
+                        echo "  IMPORTANT: Update your .sources files to reference: $newfile"
+                        echo "  Test with 'sudo apt update'"
+                        fixes_applied=$((fixes_applied + 1))
+                    else
+                        echo "  WARNING: Key copied but failed to remove old key"
+                        echo "  New key: $newfile"
+                        echo "  Old key still exists: $keyfile"
+                        fixes_applied=$((fixes_applied + 1))
+                    fi
                 else
                     echo "  ERROR: Failed to copy key"
                     fixes_failed=$((fixes_failed + 1))
@@ -1623,6 +1637,12 @@ move_legacy_key() {
     echo "  To:   $newfile"
     echo ""
     
+    # Create backup
+    local backup_file="/tmp/$(basename "$keyfile").backup-$(date +%Y%m%d-%H%M%S)"
+    sudo cp "$keyfile" "$backup_file"
+    echo "Backup created: $backup_file"
+    echo ""
+    
     # Create keyrings directory if it doesn't exist
     if [[ ! -d "/etc/apt/keyrings" ]]; then
         sudo mkdir -p /etc/apt/keyrings
@@ -1633,12 +1653,21 @@ move_legacy_key() {
     sudo cp "$keyfile" "$newfile"
     sudo chmod 644 "$newfile"
     
-    echo "SUCCESS: Key moved to $newfile"
+    # Remove the old key
+    if sudo rm "$keyfile" 2>/dev/null; then
+        echo "SUCCESS: Key moved to $newfile"
+        echo "Old key removed from: $keyfile"
+        echo "Backup saved: $backup_file"
+    else
+        echo "SUCCESS: Key copied to $newfile"
+        echo "WARNING: Failed to remove old key: $keyfile"
+        echo "You may need to manually remove it"
+    fi
+    
     echo ""
     echo "Next steps:"
     echo "1. Update your .sources files to reference: $newfile"
     echo "2. Test with 'sudo apt update'"
-    echo "3. Remove old key: sudo rm $keyfile"
 }
 
 # 21. Show keys needing renewal
