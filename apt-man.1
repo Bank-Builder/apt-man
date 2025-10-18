@@ -21,11 +21,11 @@ like missing keys or outdated key formats.
 List all APT sources. If \fB\-\-keys\fR is specified, also show the GPG signing
 key associated with each source.
 .TP
-.B show \fIID\fR
-Show all available packages in the source identified by \fIID\fR.
-.TP
-.B installed \fIID\fR
+.B list \fIID\fR
 Show all installed packages from the source identified by \fIID\fR.
+.TP
+.B list \fIID\fR \-\-available
+Show all available packages in the source identified by \fIID\fR.
 .TP
 .B remove \fIID\fR
 Remove all packages installed from the source identified by \fIID\fR.
@@ -168,6 +168,12 @@ List all active and disabled sources.
 .TP
 .B apt-man list \-\-keys
 List all sources with their GPG signing keys.
+.TP
+.B apt-man list 2
+Show installed packages from source ID 2.
+.TP
+.B apt-man list 2 \-\-available
+Show available packages in source ID 2.
 .TP
 .B apt-man disable 5
 Disable the source with ID 5.

@@ -2207,8 +2207,8 @@ Manage APT sources, PPAs, and GPG keys with ease.
 
 Commands:
   list [--keys]                list all sources (optionally with keys)
-  show ID                      show packages in a source
-  installed ID                 show installed packages from a source
+  list ID                      show installed packages from a source
+  list ID --available          show available packages in a source
   remove ID                    remove all packages from a source
   disable ID                   disable a source
   enable ID                    enable a disabled source
@@ -2243,6 +2243,8 @@ Key Format Classifications:
 Examples:
   apt-man list                 List all sources
   apt-man list --keys          List sources with their keys
+  apt-man list 2               Show installed packages from source 2
+  apt-man list 2 --available   Show available packages in source 2
   apt-man disable 5            Disable source ID 5
   apt-man use-https 7          Convert source ID 7 to HTTPS
   apt-man migrate 3            Convert .list file to .sources format
@@ -2307,23 +2309,25 @@ case "$COMMAND" in
     list)
         if [[ "${2:-}" == "--keys" ]]; then
             list_sources_with_keys
+        elif [[ -n "${2:-}" ]]; then
+            # list <id> or list <id> --available
+            id="$2"
+            show_available="${3:-}"
+            
+            rm -f /tmp/sources_index
+            list_sources > /dev/null
+            
+            if [[ "$show_available" == "--available" ]]; then
+                show_packages "$id"
+            else
+                show_installed "$id"
+            fi
         else
             rm -f /tmp/sources_index
             list_sources
         fi
         ;;
     
-    show)
-        [[ $# -eq 2 ]] || { echo "Usage: apt-man show <id>"; exit 1; }
-        rm -f /tmp/sources_index
-        list_sources > /dev/null
-        show_packages "$2"
-        ;;
-    
-    installed)
-        [[ $# -eq 2 ]] || { echo "Usage: apt-man installed <id>"; exit 1; }
-        show_installed "$2"
-        ;;
     
     remove)
         [[ $# -eq 2 ]] || { echo "Usage: apt-man remove <id>"; exit 1; }

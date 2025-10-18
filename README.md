@@ -104,6 +104,16 @@ List sources with their GPG keys:
 apt-man list --keys
 ```
 
+Show installed packages from a source:
+```bash
+apt-man list 2
+```
+
+Show available packages in a source:
+```bash
+apt-man list 2 --available
+```
+
 Run comprehensive security audit:
 ```bash
 apt-man lint
@@ -178,14 +188,14 @@ apt-man keys --renewal
 
 ### Package Operations
 
-Show packages in a source:
-```bash
-apt-man show 3
-```
-
 Show installed packages from a source:
 ```bash
-apt-man installed 3
+apt-man list 3
+```
+
+Show available packages in a source:
+```bash
+apt-man list 3 --available
 ```
 
 Remove all packages from a source and optionally disable the source:
@@ -345,7 +355,10 @@ sudo apt update
 
 ```bash
 # Show what's installed from the source
-apt-man installed 4
+apt-man list 4
+
+# Show what's available in the source
+apt-man list 4 --available
 
 # Comprehensive removal with prompts at each step
 apt-man remove 4
