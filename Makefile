@@ -8,7 +8,7 @@ COMPLETIONDIR = $(PREFIX)/share/bash-completion/completions
 
 # Package information
 PACKAGE_NAME = apt-man
-VERSION = 1.0
+VERSION = $(shell git describe --tags --always --dirty 2>/dev/null || echo "1.0")
 ARCHITECTURE = all
 MAINTAINER = Bank-Builder <bank-builder@example.com>
 DESCRIPTION = APT Source and Key Manager
@@ -44,6 +44,13 @@ help:
 	@echo "  COMPLETIONDIR=$(COMPLETIONDIR)"
 	@echo "  VERSION=$(VERSION)"
 	@echo "  ARCHITECTURE=$(ARCHITECTURE)"
+	@echo ""
+	@echo "Version Management:"
+	@echo "  Current version: $(VERSION)"
+	@echo "  To create a new version:"
+	@echo "    git tag v1.1.0"
+	@echo "    git push origin v1.1.0"
+	@echo "    make deb"
 
 # Build compressed man page
 apt-man.1.gz: apt-man.1
