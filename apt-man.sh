@@ -226,11 +226,34 @@ show_installed() {
     url=$(grep "^$id|" /tmp/sources_index | cut -d'|' -f3)
     echo "Installed packages from $url:"
     echo "--------------------------------------"
+    
+    # Get total package count to estimate time
+    local total_pkgs=$(dpkg-query -W | wc -l)
+    local checked=0
+    local found_packages=0
+    
+    echo "Checking $total_pkgs packages... (this may take a moment)"
+    
     for pkg in $(dpkg-query -W -f='${binary:Package}\n'); do
+        checked=$((checked + 1))
+        
+        # Show progress every 100 packages
+        if [ $((checked % 100)) -eq 0 ]; then
+            echo -ne "Checked $checked/$total_pkgs packages\r"
+        fi
+        
         if apt-cache policy "$pkg" 2>/dev/null | grep -q "$url"; then
+            echo -ne "\r\033[K"  # Clear progress line
             echo "$pkg"
+            found_packages=$((found_packages + 1))
         fi
     done
+    
+    echo -ne "\r\033[K"  # Clear the progress line
+    
+    if [ $found_packages -eq 0 ]; then
+        echo "No packages installed from this source."
+    fi
 }
 
 # 4. Remove all installed packages from a 3rd-party source
