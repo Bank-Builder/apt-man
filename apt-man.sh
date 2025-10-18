@@ -37,6 +37,34 @@ parse_deb822() {
     done < "$file"
 }
 
+# Extract Signed-By field from DEB822 format
+parse_deb822_keys() {
+    local file="$1"
+    
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^Signed-By:[[:space:]]*(.+)$ ]]; then
+            echo "${BASH_REMATCH[1]}"
+        fi
+    done < "$file"
+}
+
+# Classify key format
+classify_key() {
+    local keyfile="$1"
+    
+    if [[ "$keyfile" == "/etc/apt/trusted.gpg" ]]; then
+        echo "OLD (deprecated)"
+    elif [[ "$keyfile" =~ ^/etc/apt/trusted\.gpg\.d/ ]]; then
+        echo "OLD (trusted.gpg.d)"
+    elif [[ "$keyfile" =~ ^/usr/share/keyrings/ ]]; then
+        echo "NEW (system keyring)"
+    elif [[ "$keyfile" =~ ^/etc/apt/keyrings/ ]]; then
+        echo "NEW (apt keyring)"
+    else
+        echo "CUSTOM"
+    fi
+}
+
 # 1. List all sources
 list_sources() {
     echo "Detected APT sources:"
@@ -228,11 +256,157 @@ list_disabled() {
     echo "--------------------------------------"
 }
 
+# 9. List all GPG keys
+list_keys() {
+    echo "APT GPG Keys:"
+    echo "--------------------------------------"
+    local i=1
+    
+    # Check old deprecated keyring
+    if [[ -f "/etc/apt/trusted.gpg" ]]; then
+        local format=$(classify_key "/etc/apt/trusted.gpg")
+        printf "[%02d] %-25s %s\n" "$i" "$format" "/etc/apt/trusted.gpg"
+        ((i++))
+    fi
+    
+    # Check old-style trusted.gpg.d directory
+    for keyfile in /etc/apt/trusted.gpg.d/*.gpg; do
+        [[ -f "$keyfile" ]] || continue
+        local format=$(classify_key "$keyfile")
+        printf "[%02d] %-25s %s\n" "$i" "$format" "$keyfile"
+        ((i++))
+    done
+    
+    # Check new-style keyrings directory
+    for keyfile in /etc/apt/keyrings/*.gpg; do
+        [[ -f "$keyfile" ]] || continue
+        local format=$(classify_key "$keyfile")
+        printf "[%02d] %-25s %s\n" "$i" "$format" "$keyfile"
+        ((i++))
+    done
+    
+    # Check system keyrings
+    for keyfile in /usr/share/keyrings/*.gpg; do
+        [[ -f "$keyfile" ]] || continue
+        local format=$(classify_key "$keyfile")
+        printf "[%02d] %-25s %s\n" "$i" "$format" "$keyfile"
+        ((i++))
+    done
+    
+    echo "--------------------------------------"
+}
+
+# 10. List sources with their keys
+list_sources_with_keys() {
+    echo "APT sources with their signing keys:"
+    echo "--------------------------------------"
+    local i=1
+    
+    # Process old-style .list files
+    for file in "$MAIN_LIST" "$SOURCES_DIR"/*.list; do
+        [[ -f "$file" ]] || continue
+        while read -r line; do
+            [[ "$line" =~ ^deb ]] || continue
+            url=$(echo "$line" | awk '{print $2}')
+            label=$(classify_source "$url")
+            printf "[%02d] %-30s %-40s\n" "$i" "$label" "$url"
+            echo "     Key: Uses default keyring (old-style)"
+            ((i++))
+        done < "$file"
+    done
+    
+    # Process new-style .sources files (DEB822 format)
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        
+        # Get URIs and Signed-By from the same file
+        local urls=()
+        local keys=()
+        
+        while IFS= read -r url; do
+            [[ -n "$url" ]] && urls+=("$url")
+        done < <(parse_deb822 "$file")
+        
+        while IFS= read -r key; do
+            [[ -n "$key" ]] && keys+=("$key")
+        done < <(parse_deb822_keys "$file")
+        
+        # Display each URL with its key
+        for url in "${urls[@]}"; do
+            label=$(classify_source "$url")
+            printf "[%02d] %-30s %-40s\n" "$i" "$label" "$url"
+            if [[ ${#keys[@]} -gt 0 ]]; then
+                for key in "${keys[@]}"; do
+                    local key_format=$(classify_key "$key")
+                    printf "     Key: %-25s %s\n" "$key_format" "$key"
+                done
+            else
+                echo "     Key: None specified (uses default)"
+            fi
+            ((i++))
+        done
+    done
+    
+    # Process disabled old-style .list files
+    for file in "$SOURCES_DIR"/*.list.disabled; do
+        [[ -f "$file" ]] || continue
+        while read -r line; do
+            [[ "$line" =~ ^deb ]] || continue
+            url=$(echo "$line" | awk '{print $2}')
+            label=$(classify_source "$url")
+            printf "[%02d] %-30s [disabled] %-40s\n" "$i" "$label" "$url"
+            echo "     Key: Uses default keyring (old-style)"
+            ((i++))
+        done < "$file"
+    done
+    
+    # Process disabled new-style .sources files
+    for file in "$SOURCES_DIR"/*.sources.disabled; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        
+        local urls=()
+        local keys=()
+        
+        while IFS= read -r url; do
+            [[ -n "$url" ]] && urls+=("$url")
+        done < <(parse_deb822 "$file")
+        
+        while IFS= read -r key; do
+            [[ -n "$key" ]] && keys+=("$key")
+        done < <(parse_deb822_keys "$file")
+        
+        for url in "${urls[@]}"; do
+            label=$(classify_source "$url")
+            printf "[%02d] %-30s [disabled] %-40s\n" "$i" "$label" "$url"
+            if [[ ${#keys[@]} -gt 0 ]]; then
+                for key in "${keys[@]}"; do
+                    local key_format=$(classify_key "$key")
+                    printf "     Key: %-25s %s\n" "$key_format" "$key"
+                done
+            else
+                echo "     Key: None specified (uses default)"
+            fi
+            ((i++))
+        done
+    done
+    
+    echo "--------------------------------------"
+}
+
 # CLI entry
 case "${1:-}" in
     --list)
-        rm -f /tmp/sources_index
-        list_sources
+        if [[ "${2:-}" == "--keys" ]]; then
+            list_sources_with_keys
+        else
+            rm -f /tmp/sources_index
+            list_sources
+        fi
+        ;;
+    --keys)
+        list_keys
         ;;
     --show)
         [[ $# -eq 2 ]] || { echo "Usage: $0 --show <id>"; exit 1; }
@@ -266,7 +440,7 @@ case "${1:-}" in
         list_disabled
         ;;
     *)
-        echo "Usage: $0 [--list | --show <id> | --installed <id> | --remove <id> | --upgrade-source <old> <new> | --disable <id> | --enable <id> | --list-disabled]"
+        echo "Usage: $0 [--list [--keys] | --keys | --show <id> | --installed <id> | --remove <id> | --upgrade-source <old> <new> | --disable <id> | --enable <id> | --list-disabled]"
         exit 1
         ;;
 esac
