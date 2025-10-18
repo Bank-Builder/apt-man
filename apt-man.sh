@@ -221,8 +221,9 @@ remove_packages() {
     else
         # Get total package count to estimate time
         local total_pkgs=$(dpkg-query -W | wc -l)
-        echo "This system has $total_pkgs packages installed."
-        echo "Checking all packages against this source may take 1-2 minutes."
+        echo "Note: Your system has $total_pkgs packages installed total."
+        echo "      Searching through all of them to find packages from this source"
+        echo "      may take 1-2 minutes on systems with many packages."
         echo ""
         read -p "Search for installed packages from this source? [y/N] " -n 1 -r
         echo
