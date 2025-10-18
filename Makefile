@@ -54,6 +54,7 @@ help:
 
 # Build compressed man page
 apt-man.1.gz: apt-man.1
+	@rm -f apt-man.1.gz
 	gzip -9 -c apt-man.1 > apt-man.1.gz
 
 # Build info page
@@ -133,7 +134,7 @@ deb: apt-man.1.gz apt-man.info
 	cp apt-man.info debian/usr/share/info/
 	cp apt-man-completion.bash debian/usr/share/bash-completion/completions/apt-man
 	cp README.md debian/usr/share/doc/apt-man/
-	cp LICENSE debian/usr/share/doc/apt-man/
+	cp LICENCE debian/usr/share/doc/apt-man/
 	
 	# Create control file
 	@echo "Package: $(PACKAGE_NAME)" > debian/DEBIAN/control
