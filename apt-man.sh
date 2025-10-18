@@ -947,7 +947,7 @@ list_held() {
             [[ -n "$package" ]] || continue
             
             # Get package version and source
-            local version=$(dpkg-query -W -f='${Version}' "$package" 2>/dev/null)
+            local version=$(apt list --installed "$package" 2>/dev/null | grep "^$package/" | awk '{print $2}' | head -1)
             local source=$(apt-cache policy "$package" 2>/dev/null | grep -A1 "Installed:" | tail -1 | awk '{print $2}')
             
             printf "%-30s %-20s %s\n" "$package" "$version" "$source"
@@ -1741,7 +1741,7 @@ lint_sources() {
     # Check 17: Architecture mismatches
     echo "[CHECK 17] Architecture mismatches"
     local arch_issues=0
-    local system_arch=$(dpkg --print-architecture)
+    local system_arch=$(uname -m)
     
     # Common wrong architecture patterns
     for file in "$SOURCES_DIR"/*.list; do
@@ -1969,15 +1969,15 @@ lint_sources() {
     echo "[CHECK 22] Package database integrity"
     local db_issues=0
     
-    # Check if dpkg database is locked
-    if [[ -f /var/lib/dpkg/lock-frontend ]] || [[ -f /var/lib/dpkg/lock ]]; then
+    # Check if package manager is locked
+    if [[ -f /var/lib/apt/lists/lock ]] || [[ -f /var/cache/apt/archives/lock ]]; then
         echo "  [WARN] Package database is locked"
         echo "         Recommendation: Wait for other package operations to complete"
         db_issues=$((db_issues + 1))
     fi
     
-    # Check for broken packages
-    local broken_packages=$(dpkg --audit 2>/dev/null | wc -l)
+    # Check for broken packages using apt
+    local broken_packages=$(apt list --installed 2>/dev/null | grep -c "\\[installed,local\\]" || echo "0")
     if [[ $broken_packages -gt 0 ]]; then
         echo "  [FAIL] Broken packages detected: $broken_packages"
         echo "         Recommendation: Run 'apt-man fix-deps' to repair"

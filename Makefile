@@ -220,7 +220,10 @@ deb: apt-man.1.gz debian/copyright debian/changelog
 	# Create prerm script
 	@echo "#!/bin/bash" > debian/DEBIAN/prerm
 	@echo "set -e" >> debian/DEBIAN/prerm
-	@echo "# Package removal completed successfully" >> debian/DEBIAN/prerm
+	@echo "# Remove bash completion" >> debian/DEBIAN/prerm
+	@echo "if [ -f /usr/share/bash-completion/completions/apt-man ]; then" >> debian/DEBIAN/prerm
+	@echo "    rm -f /usr/share/bash-completion/completions/apt-man" >> debian/DEBIAN/prerm
+	@echo "fi" >> debian/DEBIAN/prerm
 	@echo "exit 0" >> debian/DEBIAN/prerm
 	chmod 755 debian/DEBIAN/prerm
 	
