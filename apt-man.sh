@@ -195,7 +195,7 @@ show_packages() {
     
     # Check if we got valid package data (starts with Package:)
     if [[ "$packages" =~ ^Package: ]]; then
-        echo "$packages" | grep -E '^Package: ' | awk '{print $2}'
+        echo "$packages" | grep -E '^Package: ' | awk '{print $2}' | sort | uniq
     else
         echo "No packages found at: $packages_url"
         echo ""
@@ -212,7 +212,7 @@ show_packages() {
             echo "Trying: $alt_url"
             local alt_packages=$(curl -s "$alt_url" 2>/dev/null)
             if [[ "$alt_packages" =~ ^Package: ]]; then
-                echo "$alt_packages" | grep -E '^Package: ' | awk '{print $2}'
+                echo "$alt_packages" | grep -E '^Package: ' | awk '{print $2}' | sort | uniq
                 break
             fi
         done
