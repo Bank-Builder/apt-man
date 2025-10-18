@@ -865,6 +865,66 @@ lint_sources() {
         checks_passed=$((checks_passed + 1))
     fi
     
+    # Check 11: Unreachable sources
+    echo "[CHECK 11] Unreachable repository URLs (timeout 5s)"
+    local unreachable_count=0
+    declare -A tested_urls
+    
+    # Test each unique URL
+    for file in "$SOURCES_DIR"/*.list; do
+        [[ -f "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        while read -r line; do
+            [[ "$line" =~ ^deb ]] || continue
+            local url=$(echo "$line" | awk '{print $2}')
+            url="${url%/}"
+            
+            # Skip if already tested
+            [[ -v "tested_urls[$url]" ]] && continue
+            tested_urls[$url]=1
+            
+            # Test URL with timeout
+            if ! curl -sf --max-time 5 --head "$url" >/dev/null 2>&1; then
+                echo "  [WARN] Unreachable source: $url"
+                echo "         File: $file"
+                unreachable_count=$((unreachable_count + 1))
+            fi
+        done < "$file"
+    done
+    
+    for file in "$SOURCES_DIR"/*.sources; do
+        [[ -f "$file" ]] || continue
+        [[ -s "$file" ]] || continue
+        [[ "$file" =~ \.disabled$ ]] && continue
+        
+        while IFS='|' read -r url key; do
+            [[ -n "$url" ]] || continue
+            url="${url%/}"
+            
+            # Skip if already tested
+            [[ -v "tested_urls[$url]" ]] && continue
+            tested_urls[$url]=1
+            
+            # Test URL with timeout
+            if ! curl -sf --max-time 5 --head "$url" >/dev/null 2>&1; then
+                echo "  [WARN] Unreachable source: $url"
+                echo "         File: $file"
+                unreachable_count=$((unreachable_count + 1))
+            fi
+        done < <(parse_deb822_stanzas "$file")
+    done
+    
+    if [[ $unreachable_count -gt 0 ]]; then
+        echo "         Found $unreachable_count unreachable source(s)"
+        echo "         Recommendation: Remove or fix unreachable repositories"
+        echo ""
+        warnings_found=$((warnings_found + 1))
+    else
+        echo "  [PASS] All sources are reachable"
+        echo ""
+        checks_passed=$((checks_passed + 1))
+    fi
+    
     # Summary
     echo "============================================"
     echo "LINT SUMMARY"
