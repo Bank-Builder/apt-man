@@ -206,6 +206,8 @@ Scans for HTTP sources and tests if HTTPS is available before converting
 @item
 Moves legacy keys from @file{trusted.gpg.d/} to @file{/etc/apt/keyrings/}
 @item
+Automatically updates .sources files with new key paths
+@item
 Removes old keys after successful copy (backups saved)
 @item
 Detects unreachable sources and offers to disable or remove them
@@ -216,7 +218,7 @@ Creates timestamped backup directory for all modified files
 @item
 Tests URL reachability before making changes
 @item
-Provides clear instructions for required manual steps
+Provides clear instructions for any remaining manual steps
 @item
 Shows summary of applied, skipped, and failed fixes
 @end itemize
@@ -372,15 +374,17 @@ Copies the key to the new location
 @item
 Sets appropriate file permissions
 @item
-Removes the key from the legacy location
+Automatically updates all @file{.sources} files that reference the old key path
 @item
-Provides instructions for updating source files
+Removes the key from the legacy location
 @end itemize
 
-@strong{Important:} After moving a key, you must update your .sources files
-to explicitly reference the new key location using the @code{Signed-By} field.
-Test with @command{apt update} to ensure everything works. If there are problems,
-restore the backup from @file{/tmp/}.
+@strong{Automatic Updates:} The command scans all @file{.sources} files in
+@file{/etc/apt/sources.list.d/} and automatically replaces references to the old
+key path with the new path. Each updated file is backed up before modification.
+
+@strong{Testing:} After the key is moved, test with @command{apt update} to ensure
+everything works. If there are problems, restore the backups from @file{/tmp/}.
 
 Example:
 @example

@@ -56,6 +56,8 @@ Scans for HTTP sources and tests if HTTPS is available
 .IP \(bu 2
 Moves legacy keys to modern locations (removes old keys after backup)
 .IP \(bu 2
+Automatically updates .sources files with new key paths
+.IP \(bu 2
 Detects unreachable sources and offers to disable or remove them
 .IP \(bu 2
 Prompts for confirmation before each change
@@ -99,8 +101,8 @@ algorithm, creation date, expiration date, and status.
 .B keys \-\-move \fIKEYFILE\fR
 Move a legacy key from /etc/apt/trusted.gpg.d/ to the modern location
 /etc/apt/keyrings/. Creates a backup in /tmp/, copies the key to the new
-location, and removes it from the legacy location. Provides instructions
-for updating source files.
+location, automatically updates all .sources files that reference the old
+key path, and removes the key from the legacy location.
 .TP
 .B keys \-\-renewal
 Show all GPG keys that will expire in the next 90 days, helping plan for

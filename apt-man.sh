@@ -1316,6 +1316,17 @@ lint_fix() {
     # Create a backup directory
     local backup_dir="/tmp/apt-man-backup-$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$backup_dir"
+    local manifest_file="$backup_dir/MANIFEST.txt"
+    
+    # Create manifest header
+    cat > "$manifest_file" << EOF
+# apt-man lint --fix manifest
+# Created: $(date)
+# This file tracks all changes for potential revert
+#
+# Format: ACTION|TARGET|BACKUP|DETAILS
+EOF
+    
     echo "Backup directory: $backup_dir"
     echo ""
     
@@ -1356,6 +1367,7 @@ lint_fix() {
                     # Apply the fix
                     if sudo sed -i "s|http://|https://|g" "$file" 2>/dev/null; then
                         echo "  SUCCESS: Converted to HTTPS"
+                        echo "HTTP_TO_HTTPS|$file|$backup_dir/$(basename "$file")|$url -> $https_url" >> "$manifest_file"
                         fixes_applied=$((fixes_applied + 1))
                     else
                         echo "  ERROR: Failed to update file"
@@ -1390,7 +1402,7 @@ lint_fix() {
         echo "Found ${#legacy_keys[@]} legacy key(s) in trusted.gpg.d/"
         echo ""
         echo "NOTE: Keys will be moved to /etc/apt/keyrings/ and removed from legacy location."
-        echo "IMPORTANT: You must update .sources files to reference the new key location."
+        echo "INFO: .sources files will be automatically updated with new key paths."
         echo "Backups will be saved in: $backup_dir"
         echo ""
         
@@ -1415,18 +1427,43 @@ lint_fix() {
                 
                 # Copy the key and remove old one
                 if sudo cp "$keyfile" "$newfile" 2>/dev/null && sudo chmod 644 "$newfile" 2>/dev/null; then
+                    # Update .sources files that reference this key
+                    local sources_updated=0
+                    for sourcefile in /etc/apt/sources.list.d/*.sources; do
+                        [[ -f "$sourcefile" ]] || continue
+                        
+                        # Check if this source file references the old key
+                        if grep -q "$keyfile" "$sourcefile" 2>/dev/null; then
+                            # Backup the source file
+                            sudo cp "$sourcefile" "$backup_dir/$(basename "$sourcefile")"
+                            
+                            # Update the key reference
+                            if sudo sed -i "s|$keyfile|$newfile|g" "$sourcefile" 2>/dev/null; then
+                                echo "  Updated: $(basename "$sourcefile")"
+                                sources_updated=$((sources_updated + 1))
+                            fi
+                        fi
+                    done
+                    
                     # Remove the legacy key
                     if sudo rm "$keyfile" 2>/dev/null; then
                         echo "  SUCCESS: Key moved to $newfile"
                         echo "  Old key removed from: $keyfile"
+                        if [[ $sources_updated -gt 0 ]]; then
+                            echo "  Updated $sources_updated .sources file(s)"
+                        fi
                         echo "  Backup saved in: $backup_dir"
-                        echo "  IMPORTANT: Update your .sources files to reference: $newfile"
                         echo "  Test with 'sudo apt update'"
+                        echo "KEY_MOVED|$keyfile|$backup_dir/$(basename "$keyfile")|$newfile" >> "$manifest_file"
                         fixes_applied=$((fixes_applied + 1))
                     else
                         echo "  WARNING: Key copied but failed to remove old key"
                         echo "  New key: $newfile"
                         echo "  Old key still exists: $keyfile"
+                        if [[ $sources_updated -gt 0 ]]; then
+                            echo "  Updated $sources_updated .sources file(s)"
+                        fi
+                        echo "KEY_COPIED|$keyfile|$backup_dir/$(basename "$keyfile")|$newfile" >> "$manifest_file"
                         fixes_applied=$((fixes_applied + 1))
                     fi
                 else
@@ -1490,6 +1527,7 @@ lint_fix() {
                 if sudo mv "$file" "$disabled_file" 2>/dev/null; then
                     echo "  SUCCESS: Source disabled"
                     echo "  Moved to: $disabled_file"
+                    echo "SOURCE_DISABLED|$file|$backup_dir/$(basename "$file")|$disabled_file" >> "$manifest_file"
                     fixes_applied=$((fixes_applied + 1))
                 else
                     echo "  ERROR: Failed to disable source"
@@ -1507,6 +1545,7 @@ lint_fix() {
                     if sudo rm "$file" 2>/dev/null; then
                         echo "  SUCCESS: Source file removed"
                         echo "  Backup saved in: $backup_dir"
+                        echo "SOURCE_REMOVED|$file|$backup_dir/$(basename "$file")|deleted" >> "$manifest_file"
                         fixes_applied=$((fixes_applied + 1))
                     else
                         echo "  ERROR: Failed to remove source"
@@ -1539,13 +1578,246 @@ lint_fix() {
     if [[ $fixes_applied -gt 0 ]]; then
         echo "Changes have been applied. Run 'sudo apt update' to test."
         echo "Backups saved in: $backup_dir"
+        echo "Manifest: $manifest_file"
         echo ""
-        echo "To revert changes, restore files from the backup directory."
+        echo "To revert all changes, run:"
+        echo "  sudo apt-man revert $backup_dir"
         echo ""
         echo "Run 'apt-man lint' again to verify the fixes."
     else
         echo "No changes were made."
+        rm -f "$manifest_file"
         rmdir "$backup_dir" 2>/dev/null || true
+    fi
+}
+
+# Revert changes from a lint --fix session
+revert_changes() {
+    local backup_selection="$1"
+    
+    # If no argument provided, list available backups with details
+    if [[ -z "$backup_selection" ]]; then
+        echo "============================================"
+        echo "AVAILABLE BACKUPS"
+        echo "============================================"
+        echo ""
+        
+        local backups=()
+        mapfile -t backups < <(ls -dt /tmp/apt-man-backup-* 2>/dev/null)
+        
+        if [[ ${#backups[@]} -eq 0 ]]; then
+            echo "No backups found in /tmp/"
+            echo ""
+            echo "Backups are created by 'apt-man lint --fix'"
+            return 1
+        fi
+        
+        local idx=1
+        for backup_dir in "${backups[@]}"; do
+            local manifest_file="$backup_dir/MANIFEST.txt"
+            local timestamp=$(basename "$backup_dir" | sed 's/apt-man-backup-//')
+            
+            echo "[$idx] $timestamp"
+            echo "    Directory: $backup_dir"
+            
+            if [[ -f "$manifest_file" ]]; then
+                local action_count=0
+                while IFS='|' read -r action target backup details; do
+                    [[ "$action" =~ ^# ]] && continue
+                    [[ -z "$action" ]] && continue
+                    action_count=$((action_count + 1))
+                done < "$manifest_file"
+                echo "    Changes: $action_count action(s)"
+            else
+                echo "    Changes: No manifest found"
+            fi
+            echo ""
+            
+            idx=$((idx + 1))
+        done
+        
+        echo "To revert a backup, run:"
+        echo "  sudo apt-man revert <number>"
+        echo "  sudo apt-man revert <full-path>"
+        return 0
+    fi
+    
+    local backup_dir
+    
+    # Check if selection is a number
+    if [[ "$backup_selection" =~ ^[0-9]+$ ]]; then
+        # Get the Nth backup (most recent first)
+        local backups=()
+        mapfile -t backups < <(ls -dt /tmp/apt-man-backup-* 2>/dev/null)
+        
+        if [[ ${#backups[@]} -eq 0 ]]; then
+            echo "Error: No backups found"
+            return 1
+        fi
+        
+        local idx=$((backup_selection - 1))
+        if [[ $idx -lt 0 ]] || [[ $idx -ge ${#backups[@]} ]]; then
+            echo "Error: Invalid backup number: $backup_selection"
+            echo "Available backups: 1-${#backups[@]}"
+            return 1
+        fi
+        
+        backup_dir="${backups[$idx]}"
+    else
+        # Assume it's a directory path
+        backup_dir="$backup_selection"
+    fi
+    
+    if [[ ! -d "$backup_dir" ]]; then
+        echo "Error: Backup directory not found: $backup_dir"
+        return 1
+    fi
+    
+    local manifest_file="$backup_dir/MANIFEST.txt"
+    if [[ ! -f "$manifest_file" ]]; then
+        echo "Error: Manifest file not found: $manifest_file"
+        echo "Cannot safely revert without manifest"
+        return 1
+    fi
+    
+    echo "============================================"
+    echo "APT REVERT CHANGES"
+    echo "============================================"
+    echo ""
+    echo "This will revert changes from: $backup_dir"
+    echo ""
+    
+    # Read and display what will be reverted
+    local action_count=0
+    while IFS='|' read -r action target backup details; do
+        [[ "$action" =~ ^# ]] && continue
+        [[ -z "$action" ]] && continue
+        action_count=$((action_count + 1))
+        
+        case "$action" in
+            HTTP_TO_HTTPS)
+                echo "  [$action_count] Revert HTTPS to HTTP: $(basename "$target")"
+                ;;
+            KEY_MOVED|KEY_COPIED)
+                echo "  [$action_count] Restore key: $(basename "$target")"
+                ;;
+            SOURCE_DISABLED)
+                echo "  [$action_count] Re-enable source: $(basename "$target")"
+                ;;
+            SOURCE_REMOVED)
+                echo "  [$action_count] Restore removed source: $(basename "$target")"
+                ;;
+        esac
+    done < "$manifest_file"
+    
+    if [[ $action_count -eq 0 ]]; then
+        echo "No actions to revert"
+        return 0
+    fi
+    
+    echo ""
+    read -p "Proceed with revert? [y/N] " -n 1 -r
+    echo
+    echo ""
+    
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Revert cancelled"
+        return 0
+    fi
+    
+    # Process revert actions
+    local reverted=0
+    local failed=0
+    
+    while IFS='|' read -r action target backup details; do
+        [[ "$action" =~ ^# ]] && continue
+        [[ -z "$action" ]] && continue
+        
+        case "$action" in
+            HTTP_TO_HTTPS)
+                echo "Reverting: $target"
+                if [[ -f "$backup" ]] && sudo cp "$backup" "$target" 2>/dev/null; then
+                    echo "  SUCCESS: Restored from backup"
+                    reverted=$((reverted + 1))
+                else
+                    echo "  ERROR: Failed to restore"
+                    failed=$((failed + 1))
+                fi
+                ;;
+                
+            KEY_MOVED)
+                # Restore old key and remove new key
+                local newfile="$details"
+                echo "Reverting: $target"
+                if [[ -f "$backup" ]] && sudo cp "$backup" "$target" 2>/dev/null; then
+                    # Remove the new key location
+                    if [[ -f "$newfile" ]]; then
+                        sudo rm "$newfile" 2>/dev/null
+                    fi
+                    echo "  SUCCESS: Key restored to legacy location"
+                    reverted=$((reverted + 1))
+                else
+                    echo "  ERROR: Failed to restore key"
+                    failed=$((failed + 1))
+                fi
+                ;;
+                
+            KEY_COPIED)
+                # Just restore the old key (it wasn't deleted)
+                echo "Reverting: $target (was not deleted)"
+                if [[ ! -f "$target" ]] && [[ -f "$backup" ]]; then
+                    if sudo cp "$backup" "$target" 2>/dev/null; then
+                        echo "  SUCCESS: Key restored"
+                        reverted=$((reverted + 1))
+                    else
+                        echo "  ERROR: Failed to restore"
+                        failed=$((failed + 1))
+                    fi
+                else
+                    echo "  SKIP: Key still exists"
+                fi
+                ;;
+                
+            SOURCE_DISABLED)
+                # Re-enable by renaming .disabled back to original
+                local disabled_file="$details"
+                echo "Reverting: $target"
+                if [[ -f "$disabled_file" ]] && sudo mv "$disabled_file" "$target" 2>/dev/null; then
+                    echo "  SUCCESS: Source re-enabled"
+                    reverted=$((reverted + 1))
+                else
+                    echo "  ERROR: Failed to re-enable"
+                    failed=$((failed + 1))
+                fi
+                ;;
+                
+            SOURCE_REMOVED)
+                # Restore from backup
+                echo "Reverting: $target"
+                if [[ -f "$backup" ]] && sudo cp "$backup" "$target" 2>/dev/null; then
+                    echo "  SUCCESS: Source restored"
+                    reverted=$((reverted + 1))
+                else
+                    echo "  ERROR: Failed to restore"
+                    failed=$((failed + 1))
+                fi
+                ;;
+        esac
+    done < "$manifest_file"
+    
+    echo ""
+    echo "============================================"
+    echo "REVERT SUMMARY"
+    echo "============================================"
+    echo "Actions reverted: $reverted"
+    echo "Actions failed:   $failed"
+    echo ""
+    
+    if [[ $reverted -gt 0 ]]; then
+        echo "Changes have been reverted. Run 'sudo apt update' to test."
+        echo ""
+        echo "The backup directory is preserved:"
+        echo "  $backup_dir"
     fi
 }
 
@@ -1653,21 +1925,51 @@ move_legacy_key() {
     sudo cp "$keyfile" "$newfile"
     sudo chmod 644 "$newfile"
     
+    # Update .sources files that reference this key
+    echo "Updating .sources files..."
+    local sources_updated=0
+    for sourcefile in /etc/apt/sources.list.d/*.sources; do
+        [[ -f "$sourcefile" ]] || continue
+        
+        # Check if this source file references the old key
+        if grep -q "$keyfile" "$sourcefile" 2>/dev/null; then
+            # Backup the source file
+            local source_backup="/tmp/$(basename "$sourcefile").backup-$(date +%Y%m%d-%H%M%S)"
+            sudo cp "$sourcefile" "$source_backup"
+            
+            # Update the key reference
+            if sudo sed -i "s|$keyfile|$newfile|g" "$sourcefile" 2>/dev/null; then
+                echo "  Updated: $(basename "$sourcefile")"
+                sources_updated=$((sources_updated + 1))
+            fi
+        fi
+    done
+    
     # Remove the old key
     if sudo rm "$keyfile" 2>/dev/null; then
+        echo ""
         echo "SUCCESS: Key moved to $newfile"
         echo "Old key removed from: $keyfile"
+        if [[ $sources_updated -gt 0 ]]; then
+            echo "Updated $sources_updated .sources file(s) automatically"
+        fi
         echo "Backup saved: $backup_file"
     else
+        echo ""
         echo "SUCCESS: Key copied to $newfile"
         echo "WARNING: Failed to remove old key: $keyfile"
+        if [[ $sources_updated -gt 0 ]]; then
+            echo "Updated $sources_updated .sources file(s) automatically"
+        fi
         echo "You may need to manually remove it"
     fi
     
     echo ""
     echo "Next steps:"
-    echo "1. Update your .sources files to reference: $newfile"
-    echo "2. Test with 'sudo apt update'"
+    echo "1. Test with 'sudo apt update'"
+    if [[ $sources_updated -eq 0 ]]; then
+        echo "2. If needed, manually update any .list files to reference: $newfile"
+    fi
 }
 
 # 21. Show keys needing renewal
@@ -1723,6 +2025,7 @@ Commands:
   upgrade-source OLD NEW       upgrade sources to new release
   lint                         comprehensive security audit of sources and keys
   lint --fix                   interactively fix warnings (HTTP, keys, unreachable)
+  revert [NUMBER|PATH]         revert changes from lint --fix (lists backups if no arg)
   
   migrate ID                   convert .list file to .sources format
   use-https ID                 convert HTTP source to HTTPS
@@ -1754,6 +2057,8 @@ Examples:
   apt-man migrate 3            Convert .list file to .sources format
   apt-man lint                 Run comprehensive security audit
   apt-man lint --fix           Interactively fix security warnings
+  apt-man revert               List all available backups
+  apt-man revert 1             Revert the most recent backup
   apt-man keys --check         Check for key problems
   apt-man keys --renewal       Show keys expiring soon
   apt-man keys --move /etc/apt/trusted.gpg.d/old.gpg
@@ -1871,6 +2176,10 @@ case "$COMMAND" in
     use-https)
         [[ $# -eq 2 ]] || { echo "Usage: apt-man use-https <id>"; exit 1; }
         use_https "$2"
+        ;;
+    
+    revert)
+        revert_changes "${2:-}"
         ;;
     
     keys)

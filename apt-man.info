@@ -182,13 +182,14 @@ File: apt-man.info,  Node: Source Management,  Next: Key Management,  Prev: Gett
           converting
         • Moves legacy keys from ‘trusted.gpg.d/’ to
           ‘/etc/apt/keyrings/’
+        • Automatically updates .sources files with new key paths
         • Removes old keys after successful copy (backups saved)
         • Detects unreachable sources and offers to disable or remove
           them
         • Prompts for confirmation before each change
         • Creates timestamped backup directory for all modified files
         • Tests URL reachability before making changes
-        • Provides clear instructions for required manual steps
+        • Provides clear instructions for any remaining manual steps
         • Shows summary of applied, skipped, and failed fixes
 
      *Unreachable Sources:* When an unreachable source is detected, you
@@ -315,13 +316,18 @@ File: apt-man.info,  Node: Key Management,  Next: Key Formats,  Prev: Source Man
         • Creates ‘/etc/apt/keyrings/’ if it doesn't exist
         • Copies the key to the new location
         • Sets appropriate file permissions
+        • Automatically updates all ‘.sources’ files that reference the
+          old key path
         • Removes the key from the legacy location
-        • Provides instructions for updating source files
 
-     *Important:* After moving a key, you must update your .sources
-     files to explicitly reference the new key location using the
-     ‘Signed-By’ field.  Test with ‘apt update’ to ensure everything
-     works.  If there are problems, restore the backup from ‘/tmp/’.
+     *Automatic Updates:* The command scans all ‘.sources’ files in
+     ‘/etc/apt/sources.list.d/’ and automatically replaces references to
+     the old key path with the new path.  Each updated file is backed up
+     before modification.
+
+     *Testing:* After the key is moved, test with ‘apt update’ to ensure
+     everything works.  If there are problems, restore the backups from
+     ‘/tmp/’.
 
      Example:
           apt-man keys --move /etc/apt/trusted.gpg.d/old.gpg
@@ -591,13 +597,13 @@ Node: Top445
 Node: Introduction1506
 Node: Getting Started2356
 Node: Source Management2920
-Node: Key Management8449
-Node: Key Formats11514
-Node: Source Formats13139
-Node: Examples14154
-Node: Security16527
-Node: Files17994
-Node: Index18906
+Node: Key Management8522
+Node: Key Formats11760
+Node: Source Formats13385
+Node: Examples14400
+Node: Security16773
+Node: Files18240
+Node: Index19152
 
 End Tag Table
 
